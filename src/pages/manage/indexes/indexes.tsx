@@ -19,6 +19,7 @@ import {
   VStack,
 } from "@hope-ui/solid"
 import { createSignal, Show } from "solid-js"
+import { TiWarning } from "solid-icons/ti"
 import { useFetch, useT } from "~/hooks"
 import { Group, PEmptyResp, PResp } from "~/types"
 import {
@@ -34,8 +35,10 @@ import { LineMdConfirmCircleTwotone, LineMdLoadingTwotoneLoop } from "./icons"
 
 type Progress = {
   obj_count: number
+  scanned_count?: number
   is_done: boolean
-  last_done_time: string
+  last_done_time: string | null
+  last_attempt_time?: string | null
   error: string
 }
 
@@ -126,12 +129,14 @@ const Indexes = () => {
         >
           <Icon
             boxSize="$28"
-            color="$accent9"
+            color={progress()?.error ? "$danger9" : "$accent9"}
             p="$2"
             as={
-              progress()?.is_done
-                ? LineMdConfirmCircleTwotone
-                : LineMdLoadingTwotoneLoop
+              progress()?.error
+                ? TiWarning
+                : progress()?.is_done
+                  ? LineMdConfirmCircleTwotone
+                  : LineMdLoadingTwotoneLoop
             }
           />
           <VStack spacing="$2" flex="1" alignItems="start" mr="$2">
@@ -141,11 +146,24 @@ const Indexes = () => {
                 {progress()?.obj_count}
               </Badge>
             </Text>
+            <Show
+              when={
+                progress()?.scanned_count !== undefined &&
+                (!progress()?.is_done || progress()?.error)
+              }
+            >
+              <Text>
+                {t("indexes.scanned_count")}:
+                <Badge colorScheme="info" ml="$2">
+                  {progress()?.scanned_count}
+                </Badge>
+              </Text>
+            </Show>
             <Text>
               {t("indexes.last_done_time")}:
               <Badge colorScheme="accent" ml="$2">
                 {progress()!.last_done_time
-                  ? formatDate(progress()!.last_done_time)
+                  ? formatDate(progress()!.last_done_time!)
                   : t("indexes.unknown")}
               </Badge>
             </Text>
@@ -154,6 +172,14 @@ const Indexes = () => {
                 {t("indexes.error")}:
                 <Badge colorScheme="danger" ml="$2">
                   {progress()!.error}
+                </Badge>
+              </Text>
+            </Show>
+            <Show when={progress()?.error && progress()?.last_attempt_time}>
+              <Text>
+                {t("indexes.last_attempt_time")}:
+                <Badge colorScheme="neutral" ml="$2">
+                  {formatDate(progress()!.last_attempt_time!)}
                 </Badge>
               </Text>
             </Show>

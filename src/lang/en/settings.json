@@ -44,6 +44,8 @@
   "ignore_system_files": "Ignore system files",
   "ignore_system_files-tips": "When enabled, ignores common system files during upload (.DS_Store, desktop.ini, Thumbs.db, and files starting with ._)",
   "image_types": "Image types",
+  "index_request_rate_limit": "Index request rate limit",
+  "index_request_rate_limit-tips": "Maximum storage API requests per second shared by one index task. Set to 0 for unlimited.",
   "index_progress": "Index progress",
   "ldap_default_dir": "Ldap default dir",
   "ldap_default_permission": "Ldap default permission",
