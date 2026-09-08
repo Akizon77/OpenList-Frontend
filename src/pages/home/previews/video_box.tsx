@@ -13,7 +13,12 @@ import { For, JSXElement, createSignal, createMemo, Show } from "solid-js"
 import { useRouter, useLink, useT, usePath, getGlobalPage } from "~/hooks"
 import { getPagination, objStore, setShouldKeepState } from "~/store"
 import { ObjType } from "~/types"
-import { convertURL, getPlatform, pathDir } from "~/utils"
+import {
+  buildExternalPlayerURL,
+  ExternalPlayerMedia,
+  getPlatform,
+  pathDir,
+} from "~/utils"
 import Artplayer from "artplayer"
 import { SelectWrapper } from "~/components"
 import { BsArrowRight } from "solid-icons/bs"
@@ -138,6 +143,7 @@ export const AutoHeightPlugin = (player: Artplayer) => {
 export const VideoBox = (props: {
   children: JSXElement
   onAutoNextChange: (v: boolean) => void
+  getExternalPlayerMedia?: () => ExternalPlayerMedia | undefined
 }) => {
   const { replace, pathname } = useRouter()
   const { currentObjLink } = useLink()
@@ -232,11 +238,17 @@ export const VideoBox = (props: {
               <Tooltip placement="top" withArrow label={item.name}>
                 <Anchor
                   // external
-                  href={convertURL(item.scheme, {
-                    raw_url: objStore.raw_url,
+                  href={buildExternalPlayerURL(item, {
+                    rawURL: objStore.raw_url,
+                    directURL: currentObjLink(true),
                     name: objStore.obj.name,
-                    d_url: currentObjLink(true),
                   })}
+                  onClick={(event) => {
+                    const media = props.getExternalPlayerMedia?.()
+                    if (!media) return
+                    event.preventDefault()
+                    window.open(buildExternalPlayerURL(item, media), "_self")
+                  }}
                 >
                   <Image
                     m="0 auto"

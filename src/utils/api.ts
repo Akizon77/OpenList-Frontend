@@ -54,6 +54,20 @@ export const fsList = (
   )
 }
 
+export const fsOther = <T>(
+  path: string,
+  method: string,
+  data: unknown = {},
+  password = "",
+): PResp<T> => {
+  return r.post("/fs/other", {
+    path,
+    method,
+    data,
+    password,
+  })
+}
+
 export const fsDirs = (
   path = "/",
   password = "",
