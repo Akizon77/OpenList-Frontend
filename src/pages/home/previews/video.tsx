@@ -23,6 +23,7 @@ import {
   ExternalPlayerMedia,
   ext,
   fsOther,
+  getRelatedMediaTracks,
   getEmbyDeviceID,
   getEmbyMediaSource,
   getEmbySubtitle,
@@ -42,7 +43,11 @@ import artplayerPluginAss from "~/components/artplayer-plugin-ass"
 import mpegts from "mpegts.js"
 import Hls from "hls.js"
 import { currentLang } from "~/app/i18n"
-import { AutoHeightPlugin, VideoBox } from "./video_box"
+import {
+  AutoHeightPlugin,
+  VideoBox,
+  type EmbyPlaybackControls,
+} from "./video_box"
 import { ArtPlayerIconsSubtitle } from "~/components/icons"
 import { useNavigate } from "@solidjs/router"
 import "./artplayer.css"
@@ -51,12 +56,21 @@ type PlayerSubtitle = {
   name: string
   url: string
   codec: string
+  trackKey: string
+  embyIndex?: number
+}
+
+type PlayerAudio = {
+  name: string
+  url?: string
+  trackKey: string
   embyIndex?: number
 }
 
 type SubtitleSetting = Setting & {
   codec?: string
   embyIndex?: number
+  trackKey?: string
   off?: boolean
 }
 
@@ -109,6 +123,8 @@ const Preview = () => {
   const [selectedSubtitleURL, setSelectedSubtitleURL] = createSignal<
     string | null
   >()
+  const [selectedAudioTrack, setSelectedAudioTrack] = createSignal("native")
+  const [selectedSubtitleTrack, setSelectedSubtitleTrack] = createSignal("off")
   const embyDeviceID = getEmbyDeviceID()
   let activeEmbySessionID = ""
   let activeEmbyPath = ""
@@ -116,6 +132,10 @@ const Preview = () => {
   let embyRequestVersion = 0
   let switchingPlayback = false
   let disposed = false
+  let selectSubtitleTrack: ((trackKey: string) => void) | undefined
+  let externalAudio: HTMLAudioElement | undefined
+  let externalAudioTrackKey = ""
+  let mutedBeforeExternalAudio = false
   let option: Option = {
     container: "#video-player",
     volume: 1.0,
@@ -220,22 +240,91 @@ const Preview = () => {
     autoOrientation: true,
     airplay: true,
   }
+  const relatedMediaTracks = createMemo(() =>
+    getRelatedMediaTracks(objStore.obj.name, objStore.related),
+  )
+
+  const stopExternalAudio = () => {
+    if (!externalAudio) return
+    externalAudio.pause()
+    externalAudio.removeAttribute("src")
+    externalAudio.load()
+    externalAudio = undefined
+    externalAudioTrackKey = ""
+    if (player) player.muted = mutedBeforeExternalAudio
+  }
+
+  const syncExternalAudio = () => {
+    if (!externalAudio || !player) return
+    if (Number.isFinite(player.currentTime)) {
+      const delta = Math.abs(externalAudio.currentTime - player.currentTime)
+      if (delta > 0.35 && externalAudio.readyState >= 1) {
+        externalAudio.currentTime = player.currentTime
+      }
+    }
+    if (player.playing && externalAudio.paused) {
+      void externalAudio.play().catch(() => undefined)
+    } else if (!player.playing && !externalAudio.paused) {
+      externalAudio.pause()
+    }
+  }
+
+  const setExternalAudio = async (track?: PlayerAudio) => {
+    if (!track?.url) {
+      stopExternalAudio()
+      return
+    }
+    if (externalAudioTrackKey === track.trackKey && externalAudio) {
+      syncExternalAudio()
+      return
+    }
+
+    stopExternalAudio()
+    mutedBeforeExternalAudio = player.muted
+    player.muted = true
+
+    const audio = new Audio()
+    audio.crossOrigin = "anonymous"
+    audio.preload = "auto"
+    audio.src = track.url
+    externalAudio = audio
+    externalAudioTrackKey = track.trackKey
+
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        audio.removeEventListener("loadedmetadata", finish)
+        audio.removeEventListener("error", finish)
+        resolve()
+      }
+      audio.addEventListener("loadedmetadata", finish, { once: true })
+      audio.addEventListener("error", finish, { once: true })
+      audio.load()
+    })
+
+    if (externalAudio !== audio) return
+    if (Number.isFinite(player.currentTime)) {
+      audio.currentTime = player.currentTime
+    }
+    audio.volume = player.volume
+    audio.muted = mutedBeforeExternalAudio
+    if (player.playing) void audio.play().catch(() => undefined)
+  }
+
   const subtitleAndDanmu = createMemo(() => {
     const subtitle: PlayerSubtitle[] = []
     let danmu: Obj | undefined
-    for (const obj of objStore.related) {
-      const name = obj.name.toLowerCase()
-      if (
-        name.endsWith(".srt") ||
-        name.endsWith(".ass") ||
-        name.endsWith(".vtt")
-      ) {
+    for (const track of relatedMediaTracks()) {
+      if (track.kind === "subtitle") {
         subtitle.push({
-          name: obj.name,
-          url: proxyLink(obj, true),
-          codec: ext(obj.name),
+          name: track.name,
+          url: proxyLink(track.obj, true),
+          codec: track.codec,
+          trackKey: `sidecar-subtitle:${track.name}`,
         })
-      } else if (!danmu && name.endsWith(".xml")) {
+      }
+    }
+    for (const obj of objStore.related) {
+      if (!danmu && obj.name.toLowerCase().endsWith(".xml")) {
         danmu = obj
       }
     }
@@ -247,10 +336,32 @@ const Preview = () => {
         name: embyStreamLabel(stream) + "." + extension,
         url: stream.url,
         codec: extension,
+        trackKey: `emby-subtitle:${stream.index}`,
         embyIndex: stream.index,
       })
     }
     return { subtitle, danmu }
+  })
+
+  const audioTracks = createMemo(() => {
+    const tracks: PlayerAudio[] = []
+    const source = getEmbyMediaSource(embyInfo())
+    for (const stream of source?.audio_streams ?? []) {
+      tracks.push({
+        name: embyStreamLabel(stream),
+        trackKey: `emby-audio:${stream.index}`,
+        embyIndex: stream.index,
+      })
+    }
+    for (const track of relatedMediaTracks()) {
+      if (track.kind !== "audio") continue
+      tracks.push({
+        name: track.name,
+        url: proxyLink(track.obj, true),
+        trackKey: `sidecar-audio:${track.name}`,
+      })
+    }
+    return tracks
   })
 
   // TODO: add a switch in manage panel to choose whether to enable `libass-wasm`
@@ -264,6 +375,9 @@ const Preview = () => {
   ) => {
     const { playing } = player
     const playbackType = type.toLowerCase()
+    selectSubtitleTrack = undefined
+    stopExternalAudio()
+    if (!embyInfo()) setSelectedAudioTrack("native")
     switchingPlayback = true
     player.pause()
     if (playbackType !== "m3u8") {
@@ -276,7 +390,7 @@ const Preview = () => {
     }
     player.option.id = pathname()
     player.option.type = playbackType
-    player
+    const switchPromise = player
       .switchUrl(url)
       .then(() => {
         if (resumeSeconds && resumeSeconds > 0) {
@@ -333,6 +447,7 @@ const Preview = () => {
           html: t("home.preview.emby.off"),
           tooltip: t("home.preview.emby.off"),
           default: preferredSubtitleIndex === -1,
+          trackKey: "off",
           embyIndex: -1,
           off: true,
         },
@@ -364,6 +479,7 @@ const Preview = () => {
           name: item.name,
           url: item.url,
           codec: item.codec,
+          trackKey: item.trackKey,
           embyIndex: item.embyIndex,
         })
       })
@@ -384,10 +500,12 @@ const Preview = () => {
           )
           if (switcher?.switch) switcher.switch = false
           setSelectedSubtitleURL(null)
+          setSelectedSubtitleTrack("off")
           setSubtitleVisible(false)
           return t("home.preview.emby.off")
         }
         setSelectedSubtitleURL(selected.url)
+        setSelectedSubtitleTrack(selected.trackKey ?? "off")
         if (
           enableEnhanceAss &&
           (selected.codec ?? ext(item.name)).toLowerCase() === "ass"
@@ -413,6 +531,12 @@ const Preview = () => {
 
         return selected.off ? t("home.preview.emby.off") : item.name
       }
+      selectSubtitleTrack = (trackKey) => {
+        const selected = innerMenu.find(
+          (item) => (item as SubtitleSetting).trackKey === trackKey,
+        )
+        if (selected) onSelect.call(player, selected)
+      }
       player.setting.update({
         name: "setting_subtitle",
         html: t("home.preview.emby.subtitle"),
@@ -433,6 +557,7 @@ const Preview = () => {
       player.setting.find("setting_subtitle") &&
         player.setting.remove("setting_subtitle")
       setSelectedSubtitleURL(null)
+      setSelectedSubtitleTrack("off")
       const info = embyInfo()
       if (info && info.selected_subtitle_stream_index !== -1) {
         setEmbyInfo({ ...info, selected_subtitle_stream_index: -1 })
@@ -492,6 +617,7 @@ const Preview = () => {
         )
       })
     }
+    return switchPromise
   }
 
   const removeSetting = (name: string) => {
@@ -647,13 +773,18 @@ const Preview = () => {
       activeEmbySessionID = ""
       lastEmbyProgressAt = 0
       setEmbyInfo(info)
+      setSelectedAudioTrack(
+        info.selected_audio_stream_index >= 0
+          ? `emby-audio:${info.selected_audio_stream_index}`
+          : "native",
+      )
       updateEmbySettings(info)
-      switchUrl(
+      void switchUrl(
         info.playback_url,
         info.playback_type,
         resumeSeconds,
         info.selected_subtitle_stream_index,
-      )
+      ).then(() => startEmbyPlayback(info))
     } catch (error) {
       if (requestID !== embyRequestVersion) return
       console.warn("Emby playback info failed", error)
@@ -675,6 +806,9 @@ const Preview = () => {
   ) => {
     if (!info?.play_session_id || !reportPath || !player) return
     try {
+      const positionSeconds = Number.isFinite(player.currentTime)
+        ? player.currentTime
+        : ticksToSeconds(info.playback_position_ticks)
       const resp = await fsOther(
         reportPath,
         method,
@@ -684,7 +818,7 @@ const Preview = () => {
           media_source_id: info.selected_media_source_id,
           audio_stream_index: info.selected_audio_stream_index,
           subtitle_stream_index: info.selected_subtitle_stream_index,
-          position_ticks: secondsToTicks(player.currentTime),
+          position_ticks: secondsToTicks(positionSeconds),
           is_paused: !player.playing,
           is_muted: player.muted,
           volume_level: Math.round(player.volume * 100),
@@ -697,6 +831,99 @@ const Preview = () => {
       }
     } catch (error) {
       console.warn(`Emby ${method} failed`, error)
+    }
+  }
+
+  const startEmbyPlayback = (info = embyInfo()) => {
+    if (
+      !info?.play_session_id ||
+      activeEmbySessionID === info.play_session_id
+    ) {
+      return
+    }
+    activeEmbySessionID = info.play_session_id
+    void reportEmbyPlayback("playback_start", info)
+  }
+
+  const getEmbyPlaybackControls = (): EmbyPlaybackControls | undefined => {
+    const info = embyInfo()
+    const sidecarAudio = audioTracks().filter((track) => track.url)
+    const subtitles = subtitleAndDanmu().subtitle
+    if (!info && sidecarAudio.length === 0 && subtitles.length === 0) {
+      return undefined
+    }
+
+    const audioOptions: { value: string; label: string }[] = []
+    if (!info) {
+      audioOptions.push({
+        value: "native",
+        label: t("home.preview.emby.video_audio"),
+      })
+    }
+    for (const track of audioTracks()) {
+      audioOptions.push({
+        value: track.trackKey,
+        label: track.name,
+      })
+    }
+
+    const subtitleOptions = [
+      { value: "off", label: t("home.preview.emby.off") },
+      ...subtitles.map((track) => ({
+        value: track.trackKey,
+        label: track.name,
+      })),
+    ]
+
+    return {
+      title: info ? "Emby" : t("home.preview.emby.related"),
+      mediaSources:
+        info?.media_sources.map((item) => ({
+          value: item.id,
+          label: embyMediaSourceLabel(item),
+        })) ?? [],
+      selectedMediaSource: info?.selected_media_source_id ?? "",
+      audioTracks: audioOptions,
+      selectedAudioTrack: selectedAudioTrack(),
+      subtitles: subtitleOptions,
+      selectedSubtitle: selectedSubtitleTrack(),
+      loading: embyLoading(),
+      onMediaSourceChange: (value) => {
+        const currentInfo = embyInfo()
+        if (
+          currentInfo &&
+          value !== currentInfo.selected_media_source_id &&
+          !embyLoading()
+        ) {
+          void loadEmbyPlayback({ mediaSourceID: value })
+        }
+      },
+      onAudioTrackChange: (value) => {
+        const selected = audioTracks().find((track) => track.trackKey === value)
+        setSelectedAudioTrack(value)
+        if (selected?.url) {
+          void setExternalAudio(selected)
+          return
+        }
+
+        stopExternalAudio()
+        const currentInfo = embyInfo()
+        if (
+          currentInfo &&
+          selected?.embyIndex !== undefined &&
+          selected.embyIndex !== currentInfo.selected_audio_stream_index &&
+          !embyLoading()
+        ) {
+          void loadEmbyPlayback({
+            mediaSourceID: currentInfo.selected_media_source_id,
+            audioStreamIndex: selected.embyIndex,
+            subtitleStreamIndex: currentInfo.selected_subtitle_stream_index,
+          })
+        }
+      },
+      onSubtitleChange: (value) => {
+        selectSubtitleTrack?.(value)
+      },
     }
   }
 
@@ -751,14 +978,13 @@ const Preview = () => {
     player.on("fullscreen", onFullscreen)
     player.on("fullscreenWeb", onFullscreen)
     player.on("play", () => {
+      syncExternalAudio()
       const info = embyInfo()
-      if (!info?.play_session_id) return
-      if (activeEmbySessionID !== info.play_session_id) {
-        activeEmbySessionID = info.play_session_id
-        void reportEmbyPlayback("playback_start", info)
-      }
+      startEmbyPlayback(info)
     })
+    player.on("video:playing", () => startEmbyPlayback())
     player.on("pause", () => {
+      externalAudio?.pause()
       const info = embyInfo()
       if (
         !switchingPlayback &&
@@ -768,6 +994,7 @@ const Preview = () => {
         void reportEmbyPlayback("playback_progress", info)
     })
     player.on("video:timeupdate", () => {
+      syncExternalAudio()
       const info = embyInfo()
       if (
         switchingPlayback ||
@@ -779,6 +1006,10 @@ const Preview = () => {
       if (now - lastEmbyProgressAt < 10_000) return
       lastEmbyProgressAt = now
       void reportEmbyPlayback("playback_progress", info)
+    })
+    player.on("video:seeking", syncExternalAudio)
+    player.on("video:volumechange", () => {
+      if (externalAudio) externalAudio.volume = player.volume
     })
     player.on("video:ended", () => {
       const info = embyInfo()
@@ -804,6 +1035,7 @@ const Preview = () => {
   onCleanup(() => {
     disposed = true
     embyRequestVersion++
+    stopExternalAudio()
     const info = embyInfo()
     if (info?.play_session_id && activeEmbySessionID === info.play_session_id) {
       activeEmbySessionID = ""
@@ -824,7 +1056,8 @@ const Preview = () => {
     if (embyLoading() || switchingPlayback) return undefined
     const info = embyInfo()
     const source = getEmbyMediaSource(info)
-    if (!info || !source) return undefined
+    const hasRelatedMedia = relatedMediaTracks().length > 0
+    if (!info && !hasRelatedMedia) return undefined
 
     const selectedSubtitle = selectedSubtitleURL()
     const subtitleURL =
@@ -834,19 +1067,20 @@ const Preview = () => {
 
     return {
       rawURL: objStore.raw_url,
-      directURL: source.direct_url || info.playback_url,
+      directURL: source?.direct_url || info?.playback_url || objStore.raw_url,
       name: objStore.obj.name,
       subtitleURL,
       positionSeconds:
         player && Number.isFinite(player.currentTime)
           ? player.currentTime
-          : ticksToSeconds(info.playback_position_ticks),
+          : ticksToSeconds(info?.playback_position_ticks ?? 0),
     }
   }
   return (
     <VideoBox
       onAutoNextChange={setAutoNext}
       getExternalPlayerMedia={getExternalPlayerMedia}
+      getEmbyPlaybackControls={getEmbyPlaybackControls}
     >
       <Box w="$full" h="60vh" id="video-player" />
     </VideoBox>

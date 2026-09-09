@@ -48,6 +48,8 @@ const localDictionaryOverrides: Record<string, Partial<Dictionary>> = {
     "home.preview.emby.show": "显示",
     "home.preview.emby.hide": "隐藏",
     "home.preview.emby.off": "关闭",
+    "home.preview.emby.related": "附属资源",
+    "home.preview.emby.video_audio": "视频内置音轨",
     "home.preview.emby.playback_info_failed":
       "获取 Emby 播放信息失败，已改用原始直链",
   },
@@ -59,6 +61,8 @@ const localDictionaryOverrides: Record<string, Partial<Dictionary>> = {
     "home.preview.emby.show": "顯示",
     "home.preview.emby.hide": "隱藏",
     "home.preview.emby.off": "關閉",
+    "home.preview.emby.related": "附屬資源",
+    "home.preview.emby.video_audio": "影片內置音軌",
     "home.preview.emby.playback_info_failed":
       "取得 Emby 播放資訊失敗，已改用原始直連",
   },
