@@ -4,28 +4,14 @@ import "solid-contextmenu/dist/style.css"
 import { HStack, Icon, Text, useColorMode, Image } from "@hope-ui/solid"
 import { operations } from "../toolbar/operations"
 import { createMemo, For, Show } from "solid-js"
-import {
-  buildExternalPlayerURL,
-  bus,
-  ExternalPlayerMedia,
-  fsOther,
-  getEmbyDeviceID,
-  getEmbyMediaSource,
-  getEmbySubtitle,
-  isEmbyProvider,
-  notify,
-  pathJoin,
-  ticksToSeconds,
-  torrentParse,
-} from "~/utils"
-import { EmbyPlaybackInfo, Obj, ObjType, UserMethods } from "~/types"
+import { bus, convertURL, notify, torrentParse } from "~/utils"
+import { ObjType, UserMethods } from "~/types"
 import {
   getSettingBool,
   haveSelected,
   me,
   objStore,
   oneChecked,
-  password,
   selectedObjs,
   userCan,
 } from "~/store"
@@ -60,7 +46,7 @@ export const ContextMenu = () => {
     return UserMethods.is_admin(me()) || getSettingBool("package_download")
   }
   const { rawLink } = useLink()
-  const { isShare, pathname, pushHref, to } = useRouter()
+  const { isShare, pushHref, to } = useRouter()
   const openWithPreviews = createMemo(() => {
     const objs = selectedObjs()
     if (objs.length !== 1) return []
@@ -69,43 +55,6 @@ export const ContextMenu = () => {
     return getPreviews({ ...obj, provider: objStore.provider })
     // .filter((p) => p.key !== "download")
   })
-  const getExternalPlayerMedia = async (
-    obj: Obj,
-  ): Promise<ExternalPlayerMedia> => {
-    const directURL = rawLink(obj, true)
-    const fallback: ExternalPlayerMedia = {
-      rawURL: directURL,
-      directURL,
-      name: obj.name,
-    }
-    if (!isEmbyProvider(objStore.provider)) return fallback
-
-    try {
-      const resp = await fsOther<EmbyPlaybackInfo>(
-        pathJoin(pathname(), obj.name),
-        "playback_info",
-        {
-          mode: "external",
-          device_id: getEmbyDeviceID(),
-        },
-        password(),
-      )
-      if (resp.code !== 200) throw new Error(resp.message)
-
-      const info = resp.data
-      const source = getEmbyMediaSource(info)
-      return {
-        ...fallback,
-        directURL: source?.direct_url || info.playback_url || directURL,
-        subtitleURL: getEmbySubtitle(info)?.url,
-        positionSeconds: ticksToSeconds(info.playback_position_ticks),
-      }
-    } catch (error) {
-      console.warn("Emby external playback info failed", error)
-      notify.warning(t("home.preview.emby.playback_info_failed"))
-      return fallback
-    }
-  }
   return (
     <Menu
       id={1}
@@ -255,9 +204,12 @@ export const ContextMenu = () => {
           <For each={players}>
             {(player) => (
               <Item
-                onClick={async ({ props }) => {
-                  const media = await getExternalPlayerMedia(props)
-                  const href = buildExternalPlayerURL(player, media)
+                onClick={({ props }) => {
+                  const href = convertURL(player.scheme, {
+                    raw_url: "",
+                    name: props.name,
+                    d_url: rawLink(props, true),
+                  })
                   window.open(href, "_self")
                 }}
               >

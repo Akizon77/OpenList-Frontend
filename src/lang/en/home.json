@@ -23,18 +23,6 @@
     "tr-installing": "TrollStore Installing",
     "open_in_new_window": "Open in new window",
     "auto_next": "Auto next",
-    "emby": {
-      "media_source": "Media source",
-      "audio": "Audio track",
-      "subtitle": "Subtitle",
-      "subtitle_display": "Subtitle display",
-      "show": "Show",
-      "hide": "Hide",
-      "off": "Off",
-      "related": "Attached media",
-      "video_audio": "Video audio",
-      "playback_info_failed": "Failed to load Emby playback information; using the direct link instead"
-    },
     "fullscreen": "Fullscreen",
     "fullscreen_failed": "Failed to toggle fullscreen mode",
     "exit_fullscreen": "Exit fullscreen",

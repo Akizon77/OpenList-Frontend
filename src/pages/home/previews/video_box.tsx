@@ -8,18 +8,12 @@ import {
   Switch,
   Icon,
   IconButton,
-  Text,
 } from "@hope-ui/solid"
 import { For, JSXElement, createSignal, createMemo, Show } from "solid-js"
 import { useRouter, useLink, useT, usePath, getGlobalPage } from "~/hooks"
 import { getPagination, objStore, setShouldKeepState } from "~/store"
 import { ObjType } from "~/types"
-import {
-  buildExternalPlayerURL,
-  ExternalPlayerMedia,
-  getPlatform,
-  pathDir,
-} from "~/utils"
+import { convertURL, getPlatform, pathDir } from "~/utils"
 import Artplayer from "artplayer"
 import { SelectWrapper } from "~/components"
 import { BsArrowRight } from "solid-icons/bs"
@@ -141,30 +135,9 @@ export const AutoHeightPlugin = (player: Artplayer) => {
   })
 }
 
-export type EmbyPlaybackControlOption = {
-  value: string
-  label: string
-}
-
-export type EmbyPlaybackControls = {
-  title: string
-  mediaSources: EmbyPlaybackControlOption[]
-  selectedMediaSource: string
-  audioTracks: EmbyPlaybackControlOption[]
-  selectedAudioTrack: string
-  subtitles: EmbyPlaybackControlOption[]
-  selectedSubtitle: string
-  loading: boolean
-  onMediaSourceChange: (value: string) => void
-  onAudioTrackChange: (value: string) => void
-  onSubtitleChange: (value: string) => void
-}
-
 export const VideoBox = (props: {
   children: JSXElement
   onAutoNextChange: (v: boolean) => void
-  getExternalPlayerMedia?: () => ExternalPlayerMedia | undefined
-  getEmbyPlaybackControls?: () => EmbyPlaybackControls | undefined
 }) => {
   const { replace, pathname } = useRouter()
   const { currentObjLink } = useLink()
@@ -226,74 +199,6 @@ export const VideoBox = (props: {
   return (
     <VStack w="$full" spacing="$2">
       {props.children}
-      <Show when={props.getEmbyPlaybackControls?.()}>
-        {(controls) => (
-          <Flex
-            wrap="wrap"
-            gap="$2"
-            alignItems="center"
-            w="$full"
-            css={{
-              padding: "0 0.25rem",
-            }}
-          >
-            <Text
-              css={{
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {controls().title}
-            </Text>
-            <Show when={controls().mediaSources.length > 0}>
-              <HStack spacing="$1" flexGrow={1} minW="12rem">
-                <Text css={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                  {t("home.preview.emby.media_source")}
-                </Text>
-                <SelectWrapper
-                  size="sm"
-                  w="$full"
-                  value={controls().selectedMediaSource}
-                  options={controls().mediaSources}
-                  onChange={controls().onMediaSourceChange}
-                />
-              </HStack>
-            </Show>
-            <Show when={controls().audioTracks.length > 0}>
-              <HStack spacing="$1" flexGrow={1} minW="12rem">
-                <Text css={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                  {t("home.preview.emby.audio")}
-                </Text>
-                <SelectWrapper
-                  size="sm"
-                  w="$full"
-                  value={controls().selectedAudioTrack}
-                  options={controls().audioTracks}
-                  onChange={controls().onAudioTrackChange}
-                />
-              </HStack>
-            </Show>
-            <Show when={controls().subtitles.length > 0}>
-              <HStack spacing="$1" flexGrow={1} minW="12rem">
-                <Text css={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
-                  {t("home.preview.emby.subtitle")}
-                </Text>
-                <SelectWrapper
-                  size="sm"
-                  w="$full"
-                  value={controls().selectedSubtitle}
-                  options={controls().subtitles}
-                  onChange={controls().onSubtitleChange}
-                />
-              </HStack>
-            </Show>
-            <Show when={controls().loading}>
-              <Text css={{ fontSize: "0.8rem", opacity: 0.7 }}>...</Text>
-            </Show>
-          </Flex>
-        )}
-      </Show>
       <Show when={videoName() !== ""}>
         <HStack spacing="$2" w="$full">
           <SelectWrapper
@@ -327,17 +232,11 @@ export const VideoBox = (props: {
               <Tooltip placement="top" withArrow label={item.name}>
                 <Anchor
                   // external
-                  href={buildExternalPlayerURL(item, {
-                    rawURL: objStore.raw_url,
-                    directURL: currentObjLink(true),
+                  href={convertURL(item.scheme, {
+                    raw_url: objStore.raw_url,
                     name: objStore.obj.name,
+                    d_url: currentObjLink(true),
                   })}
-                  onClick={(event) => {
-                    const media = props.getExternalPlayerMedia?.()
-                    if (!media) return
-                    event.preventDefault()
-                    window.open(buildExternalPlayerURL(item, media), "_self")
-                  }}
                 >
                   <Image
                     m="0 auto"
