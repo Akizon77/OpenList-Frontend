@@ -1,3 +1,9 @@
+export interface EmbyTranscodingQuality {
+  name: string
+  max_height: number
+  max_streaming_bitrate: number
+}
+
 export interface EmbyPlaybackInfo {
   item_id: string
   item_type: "Episode" | "Movie" | string
@@ -17,4 +23,6 @@ export interface EmbyPlaybackInfo {
   playback_url: string
   playback_type: string
   playback_method: "DirectPlay" | "DirectStream" | "Transcode"
+  playback_error?: string
+  transcoding_qualities?: EmbyTranscodingQuality[]
 }

@@ -20,8 +20,10 @@ import {
   ext,
   fsOther,
   getEmbyDeviceID,
+  getEmbyWebClientProfile,
   isEmbyProvider,
   isSubtitleFile,
+  notify,
   pathDir,
   pathJoin,
   secondsToTicks,
@@ -42,6 +44,15 @@ import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
 import "./artplayer.css"
 
+type EmbyPlaybackMode = "auto" | "direct" | "transcode"
+
+interface EmbyQualityChoice {
+  key: string
+  label: string
+  playbackMode: EmbyPlaybackMode
+  maxStreamingBitrate?: number
+}
+
 const Preview = () => {
   const { pathname, searchParams } = useRouter()
   const { proxyLink } = useLink()
@@ -52,6 +63,12 @@ const Preview = () => {
   let activeEmbyPath = ""
   let lastEmbyProgressAt = 0
   let embyRequestVersion = 0
+  let embyOriginalURL = ""
+  let embyAutoNeedsProcessing = false
+  let activeEmbyQualityKey = ""
+  let hasEmbyQualityControl = false
+  let embyQualitySwitching = false
+  let embyClientProfile: ReturnType<typeof getEmbyWebClientProfile>
   const videos = createMemo(() =>
     objStore.objs.filter((obj) => obj.type === ObjType.VIDEO),
   )
@@ -76,8 +93,8 @@ const Preview = () => {
     }
   }
   let player: Artplayer
-  let flvPlayer: mpegts.Player
-  let hlsPlayer: Hls
+  let flvPlayer: mpegts.Player | undefined
+  let hlsPlayer: Hls | undefined
   let danmakuController: DanmakuController
   let option: Option = {
     container: "#video-player",
@@ -205,6 +222,10 @@ const Preview = () => {
   ) => {
     const { playing } = player
     player.pause()
+    flvPlayer?.destroy()
+    flvPlayer = undefined
+    hlsPlayer?.destroy()
+    hlsPlayer = undefined
     player.option.id = pathname()
     player.option.type = type
     return player
@@ -368,23 +389,151 @@ const Preview = () => {
     void reportEmbyPlayback("playback_start", info)
   }
 
+  const requestEmbyPlayback = async (
+    requestPath: string,
+    playbackMode: EmbyPlaybackMode,
+    maxStreamingBitrate?: number,
+  ) => {
+    const current = requestPath === activeEmbyPath ? embyInfo() : undefined
+    const resp = await fsOther<EmbyPlaybackInfo>(
+      requestPath,
+      "playback_info",
+      {
+        mode: "web",
+        playback_mode: playbackMode,
+        device_id: embyDeviceID,
+        media_source_id: current?.selected_media_source_id,
+        audio_stream_index: current?.selected_audio_stream_index,
+        subtitle_stream_index: current?.selected_subtitle_stream_index,
+        max_streaming_bitrate: maxStreamingBitrate,
+        ...embyClientProfile,
+      },
+      password(),
+    )
+    if (resp.code !== 200) throw new Error(resp.message)
+    return resp.data
+  }
+
+  const getEmbyQualityChoices = (info = embyInfo()) => {
+    if (!info) return []
+    const choices: EmbyQualityChoice[] = [
+      { key: "direct", label: "原始", playbackMode: "direct" },
+    ]
+    if (embyAutoNeedsProcessing) {
+      choices.push({ key: "auto", label: "自动", playbackMode: "auto" })
+    }
+    for (const quality of info.transcoding_qualities ?? []) {
+      choices.push({
+        key: `transcode:${quality.max_streaming_bitrate}`,
+        label: `${quality.max_height}p · ${quality.name}`,
+        playbackMode: "transcode",
+        maxStreamingBitrate: quality.max_streaming_bitrate,
+      })
+    }
+    return choices
+  }
+
+  const activeEmbyQualityLabel = () =>
+    getEmbyQualityChoices().find(
+      (choice) => choice.key === activeEmbyQualityKey,
+    )?.label ?? "原始"
+
+  const switchEmbyQuality = async (choice: EmbyQualityChoice) => {
+    if (choice.key === activeEmbyQualityKey || embyQualitySwitching) {
+      return activeEmbyQualityLabel()
+    }
+    const requestID = ++embyRequestVersion
+    const requestPath = activeEmbyPath || pathname()
+    const previousInfo = embyInfo()
+    const position = Number.isFinite(player.currentTime)
+      ? player.currentTime
+      : ticksToSeconds(previousInfo?.playback_position_ticks ?? 0)
+    embyQualitySwitching = true
+    player.notice.show = `正在切换到 ${choice.label}`
+    try {
+      const info = await requestEmbyPlayback(
+        requestPath,
+        choice.playbackMode,
+        choice.maxStreamingBitrate,
+      )
+      if (requestID !== embyRequestVersion) return activeEmbyQualityLabel()
+      if (previousInfo?.play_session_id) {
+        await reportEmbyPlayback("playback_stop", previousInfo)
+      }
+      setEmbyInfo(info)
+      activeEmbySessionID = ""
+      lastEmbyProgressAt = 0
+      await switchUrl(
+        info.playback_url || embyOriginalURL,
+        position,
+        info.playback_type || ext(objStore.obj.name),
+      )
+      activeEmbyQualityKey = choice.key
+      startEmbyPlayback()
+      player.notice.show = `画质：${choice.label}`
+      return choice.label
+    } catch (error) {
+      if (requestID === embyRequestVersion) {
+        console.warn("Emby quality switch failed", error)
+        notify.error(
+          error instanceof Error ? error.message : "Emby 画质切换失败",
+        )
+      }
+      return activeEmbyQualityLabel()
+    } finally {
+      embyQualitySwitching = false
+      setTimeout(updateEmbyQualityControl, 0)
+    }
+  }
+
+  const updateEmbyQualityControl = () => {
+    const info = embyInfo()
+    if (!info) {
+      if (hasEmbyQualityControl) {
+        player.controls.remove("emby-quality")
+        hasEmbyQualityControl = false
+      }
+      return
+    }
+    const choices = getEmbyQualityChoices(info)
+    player.controls.update({
+      name: "emby-quality",
+      position: "right",
+      index: 25,
+      html: activeEmbyQualityLabel(),
+      tooltip: "画质",
+      selector: choices.map((choice) => ({
+        html: choice.label,
+        value: choice.key,
+        default: choice.key === activeEmbyQualityKey,
+      })),
+      onSelect: async function (item) {
+        const choice = choices.find((choice) => choice.key === item.value)
+        if (!choice) return activeEmbyQualityLabel()
+        return switchEmbyQuality(choice)
+      },
+    })
+    hasEmbyQualityControl = true
+  }
+
   const loadEmbyPlayback = async (url: string) => {
     const requestID = ++embyRequestVersion
     const requestPath = pathname()
     try {
-      const resp = await fsOther<EmbyPlaybackInfo>(
-        requestPath,
-        "playback_info",
-        { mode: "web", device_id: embyDeviceID },
-        password(),
-      )
+      const previousInfo = embyInfo()
+      const info = await requestEmbyPlayback(requestPath, "auto")
       if (requestID !== embyRequestVersion) return
-      if (resp.code !== 200) throw new Error(resp.message)
-      const info = resp.data
+      if (previousInfo?.play_session_id) {
+        await reportEmbyPlayback("playback_stop", previousInfo)
+      }
       setEmbyInfo(info)
       activeEmbyPath = requestPath
       activeEmbySessionID = ""
       lastEmbyProgressAt = 0
+      embyOriginalURL = url
+      embyAutoNeedsProcessing = info.playback_method !== "DirectPlay"
+      activeEmbyQualityKey = embyAutoNeedsProcessing ? "auto" : "direct"
+      updateEmbyQualityControl()
       await switchUrl(
         info.playback_url || url,
         ticksToSeconds(info.playback_position_ticks),
@@ -397,12 +546,17 @@ const Preview = () => {
       setEmbyInfo(undefined)
       activeEmbyPath = ""
       activeEmbySessionID = ""
+      embyOriginalURL = ""
+      embyAutoNeedsProcessing = false
+      activeEmbyQualityKey = ""
+      updateEmbyQualityControl()
       switchUrl(url)
     }
   }
 
   onMount(() => {
     player = new Artplayer(option)
+    embyClientProfile = getEmbyWebClientProfile()
     danmakuController = new DanmakuController({
       player: () => player,
       getPath: () => pathname(),
@@ -446,6 +600,10 @@ const Preview = () => {
           setEmbyInfo(undefined)
           activeEmbyPath = ""
           activeEmbySessionID = ""
+          embyOriginalURL = ""
+          embyAutoNeedsProcessing = false
+          activeEmbyQualityKey = ""
+          updateEmbyQualityControl()
           switchUrl(url)
         },
       ),
