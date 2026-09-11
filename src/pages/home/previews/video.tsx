@@ -62,12 +62,14 @@ const Preview = () => {
   let activeEmbySessionID = ""
   let activeEmbyPath = ""
   let lastEmbyProgressAt = 0
+  let lastEmbyPlaybackSeconds = 0
   let embyRequestVersion = 0
   let embyOriginalURL = ""
-  let embyAutoNeedsProcessing = false
   let activeEmbyQualityKey = ""
   let hasEmbyQualityControl = false
   let embyQualitySwitching = false
+  let embyAutoFallbackAttempted = false
+  let embyAutoFallbackTimer: number | undefined
   let embyClientProfile: ReturnType<typeof getEmbyWebClientProfile>
   const videos = createMemo(() =>
     objStore.objs.filter((obj) => obj.type === ObjType.VIDEO),
@@ -417,11 +419,9 @@ const Preview = () => {
   const getEmbyQualityChoices = (info = embyInfo()) => {
     if (!info) return []
     const choices: EmbyQualityChoice[] = [
+      { key: "auto", label: "自动", playbackMode: "auto" },
       { key: "direct", label: "原始", playbackMode: "direct" },
     ]
-    if (embyAutoNeedsProcessing) {
-      choices.push({ key: "auto", label: "自动", playbackMode: "auto" })
-    }
     for (const quality of info.transcoding_qualities ?? []) {
       choices.push({
         key: `transcode:${quality.max_streaming_bitrate}`,
@@ -436,18 +436,29 @@ const Preview = () => {
   const activeEmbyQualityLabel = () =>
     getEmbyQualityChoices().find(
       (choice) => choice.key === activeEmbyQualityKey,
-    )?.label ?? "原始"
+    )?.label ?? "自动"
 
-  const switchEmbyQuality = async (choice: EmbyQualityChoice) => {
+  const switchEmbyQuality = async (
+    choice: EmbyQualityChoice,
+    options?: { automatic?: boolean; resumeSeconds?: number },
+  ) => {
     if (choice.key === activeEmbyQualityKey || embyQualitySwitching) {
       return activeEmbyQualityLabel()
+    }
+    if (!options?.automatic) {
+      embyAutoFallbackAttempted = false
     }
     const requestID = ++embyRequestVersion
     const requestPath = activeEmbyPath || pathname()
     const previousInfo = embyInfo()
-    const position = Number.isFinite(player.currentTime)
+    const previousQualityKey = activeEmbyQualityKey
+    const currentPlaybackSeconds = Number.isFinite(player.currentTime)
       ? player.currentTime
-      : ticksToSeconds(previousInfo?.playback_position_ticks ?? 0)
+      : 0
+    const position =
+      options?.resumeSeconds ??
+      Math.max(currentPlaybackSeconds, lastEmbyPlaybackSeconds)
+    let fallbackAfterSwitch = false
     embyQualitySwitching = true
     player.notice.show = `正在切换到 ${choice.label}`
     try {
@@ -463,27 +474,82 @@ const Preview = () => {
       setEmbyInfo(info)
       activeEmbySessionID = ""
       lastEmbyProgressAt = 0
+      if (choice.playbackMode === "auto") {
+        activeEmbyQualityKey = choice.key
+      }
       await switchUrl(
         info.playback_url || embyOriginalURL,
         position,
         info.playback_type || ext(objStore.obj.name),
       )
       activeEmbyQualityKey = choice.key
+      lastEmbyPlaybackSeconds = position
       startEmbyPlayback()
       player.notice.show = `画质：${choice.label}`
       return choice.label
     } catch (error) {
       if (requestID === embyRequestVersion) {
         console.warn("Emby quality switch failed", error)
-        notify.error(
-          error instanceof Error ? error.message : "Emby 画质切换失败",
-        )
+        if (!options?.automatic && choice.playbackMode === "auto") {
+          fallbackAfterSwitch = true
+        } else {
+          notify.error(
+            options?.automatic
+              ? "原始流无法播放，自动回退失败，请手动选择画质"
+              : error instanceof Error
+                ? error.message
+                : "Emby 画质切换失败",
+          )
+        }
       }
       return activeEmbyQualityLabel()
     } finally {
       embyQualitySwitching = false
-      setTimeout(updateEmbyQualityControl, 0)
+      setTimeout(() => {
+        if (
+          fallbackAfterSwitch &&
+          !fallbackEmbyAutoPlayback() &&
+          requestID === embyRequestVersion
+        ) {
+          activeEmbyQualityKey = previousQualityKey
+        }
+        updateEmbyQualityControl()
+      }, 0)
     }
+  }
+
+  const fallbackEmbyAutoPlayback = () => {
+    const info = embyInfo()
+    if (
+      !info ||
+      activeEmbyQualityKey !== "auto" ||
+      embyAutoFallbackAttempted ||
+      embyQualitySwitching
+    ) {
+      return false
+    }
+    const fallback = getEmbyQualityChoices(info).find(
+      (choice) => choice.playbackMode === "transcode",
+    )
+    if (!fallback) return false
+
+    embyAutoFallbackAttempted = true
+    const position = Math.max(
+      Number.isFinite(player.currentTime) ? player.currentTime : 0,
+      lastEmbyPlaybackSeconds,
+    )
+    player.option.url = ""
+    player.notice.show = `原始流无法播放，正在回退到 ${fallback.label}`
+    const requestID = embyRequestVersion
+    embyAutoFallbackTimer = window.setTimeout(() => {
+      embyAutoFallbackTimer = undefined
+      if (requestID !== embyRequestVersion) return
+      void switchEmbyQuality(fallback, {
+        automatic: true,
+        resumeSeconds: position,
+      })
+    }, 1100)
+    return true
   }
 
   const updateEmbyQualityControl = () => {
@@ -530,24 +596,32 @@ const Preview = () => {
       activeEmbyPath = requestPath
       activeEmbySessionID = ""
       lastEmbyProgressAt = 0
+      lastEmbyPlaybackSeconds = ticksToSeconds(info.playback_position_ticks)
       embyOriginalURL = url
-      embyAutoNeedsProcessing = info.playback_method !== "DirectPlay"
-      activeEmbyQualityKey = embyAutoNeedsProcessing ? "auto" : "direct"
+      embyAutoFallbackAttempted = false
+      activeEmbyQualityKey = "auto"
       updateEmbyQualityControl()
-      await switchUrl(
-        info.playback_url || url,
-        ticksToSeconds(info.playback_position_ticks),
-        info.playback_type || ext(objStore.obj.name),
-      )
-      startEmbyPlayback()
+      try {
+        await switchUrl(
+          info.playback_url || url,
+          ticksToSeconds(info.playback_position_ticks),
+          info.playback_type || ext(objStore.obj.name),
+        )
+        startEmbyPlayback()
+      } catch (error) {
+        if (requestID !== embyRequestVersion) return
+        if (fallbackEmbyAutoPlayback()) return
+        throw error
+      }
     } catch (error) {
       if (requestID !== embyRequestVersion) return
       console.warn("Emby playback info failed", error)
       setEmbyInfo(undefined)
       activeEmbyPath = ""
       activeEmbySessionID = ""
+      lastEmbyPlaybackSeconds = 0
       embyOriginalURL = ""
-      embyAutoNeedsProcessing = false
+      embyAutoFallbackAttempted = false
       activeEmbyQualityKey = ""
       updateEmbyQualityControl()
       switchUrl(url)
@@ -600,8 +674,9 @@ const Preview = () => {
           setEmbyInfo(undefined)
           activeEmbyPath = ""
           activeEmbySessionID = ""
+          lastEmbyPlaybackSeconds = 0
           embyOriginalURL = ""
-          embyAutoNeedsProcessing = false
+          embyAutoFallbackAttempted = false
           activeEmbyQualityKey = ""
           updateEmbyQualityControl()
           switchUrl(url)
@@ -633,6 +708,9 @@ const Preview = () => {
     })
     player.on("video:timeupdate", () => {
       const info = embyInfo()
+      if (Number.isFinite(player.currentTime)) {
+        lastEmbyPlaybackSeconds = player.currentTime
+      }
       if (
         !info?.play_session_id ||
         activeEmbySessionID !== info.play_session_id
@@ -658,10 +736,21 @@ const Preview = () => {
         )
         player.video.crossOrigin = null
       }
+      const info = embyInfo()
+      if (
+        info?.playback_method !== "Transcode" &&
+        activeEmbyQualityKey === "auto"
+      ) {
+        fallbackEmbyAutoPlayback()
+      }
     })
   })
   onCleanup(() => {
     ++embyRequestVersion
+    if (embyAutoFallbackTimer !== undefined) {
+      window.clearTimeout(embyAutoFallbackTimer)
+      embyAutoFallbackTimer = undefined
+    }
     if (embyInfo()?.play_session_id) {
       void reportEmbyPlayback("playback_stop")
     }
