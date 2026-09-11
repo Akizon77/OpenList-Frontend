@@ -387,3 +387,234 @@
     padding-left: 12px;
   }
 }
+
+.openlist-danmaku-layer {
+  position: absolute;
+  z-index: 19;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.art-video-player .art-control-danmaku-toggle.is-active {
+  color: var(--art-theme);
+}
+
+.openlist-danmaku-heatmap {
+  position: absolute;
+  z-index: 35;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--art-theme);
+  pointer-events: none;
+}
+
+.openlist-danmaku-heatmap path {
+  fill: var(--art-theme, #1890ff);
+  fill: color-mix(in srgb, var(--art-theme, #1890ff) 56%, transparent);
+  opacity: 0.82;
+  stroke: var(--art-theme, #1890ff);
+  stroke: color-mix(in srgb, var(--art-theme, #1890ff) 88%, white 8%);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.openlist-danmaku-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px 14px 0;
+}
+
+.openlist-danmaku-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: rgb(255 255 255 / 58%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.openlist-danmaku-tabs button:hover {
+  color: #fff;
+}
+
+.openlist-danmaku-tabs button[data-active="true"] {
+  border-bottom-color: var(--art-theme, #1890ff);
+  color: #fff;
+}
+
+.openlist-danmaku-tab-panel {
+  min-height: 0;
+  flex: 1;
+}
+
+.openlist-danmaku-tab-panel[data-active="true"] {
+  display: flex !important;
+  flex-direction: column;
+}
+
+.openlist-danmaku-tab-panel[data-active="false"] {
+  display: none !important;
+}
+
+.openlist-danmaku-settings {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 6px 14px 14px;
+  overscroll-behavior: contain;
+}
+
+.openlist-danmaku-settings-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.openlist-danmaku-settings-group:last-child {
+  border-bottom: 0;
+}
+
+.openlist-danmaku-settings-title {
+  color: rgb(255 255 255 / 58%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.openlist-danmaku-checks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.openlist-danmaku-checks--stacked {
+  grid-template-columns: 1fr;
+}
+
+.openlist-danmaku-checks label {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.openlist-danmaku-checks label:hover {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 7%);
+}
+
+.openlist-danmaku-checks input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--art-theme, #1890ff);
+}
+
+.openlist-danmaku-checks span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.openlist-danmaku-range {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.openlist-danmaku-range input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--art-theme, #1890ff);
+}
+
+.openlist-danmaku-range output {
+  color: rgb(255 255 255 / 66%);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.openlist-danmaku-setting-row {
+  display: grid;
+  gap: 7px;
+}
+
+.openlist-danmaku-setting-row > span {
+  font-size: 12px;
+}
+
+.openlist-danmaku-segmented {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+[data-danmaku-segment="speed"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+[data-danmaku-segment="spacing"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+[data-danmaku-segment="fontWeight"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.openlist-danmaku-segmented button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 64%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.openlist-danmaku-segmented button:hover {
+  border-color: rgb(255 255 255 / 22%);
+  color: #fff;
+}
+
+.openlist-danmaku-segmented button.is-active {
+  border-color: color-mix(in srgb, var(--art-theme, #1890ff) 58%, transparent);
+  background: color-mix(in srgb, var(--art-theme, #1890ff) 22%, transparent);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .openlist-danmaku-tabs,
+  .openlist-danmaku-settings {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .openlist-danmaku-checks {
+    grid-template-columns: 1fr;
+  }
+}

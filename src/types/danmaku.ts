@@ -1,4 +1,14 @@
-import type { Danmu } from "artplayer-plugin-danmuku"
+export type DanmakuMode = 0 | 1 | 2
+
+export interface DanmakuComment {
+  id: string
+  text: string
+  time: number
+  mode: DanmakuMode
+  color?: string
+  border?: boolean
+  style?: Record<string, string>
+}
 
 export type DanmakuMatchStatus = "matched" | "ambiguous" | "not_found"
 
@@ -48,7 +58,7 @@ export interface DanmakuSearchResult {
 }
 
 export interface DanmakuCommentsResult {
-  comments: Danmu[]
+  comments: DanmakuComment[]
   count: number
   partial: boolean
 }

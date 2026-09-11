@@ -1,9 +1,4 @@
 import Artplayer from "artplayer"
-import artplayerPluginDanmuku, {
-  type Danmu,
-  type Option as DanmukuOption,
-  type Result as DanmukuResult,
-} from "artplayer-plugin-danmuku"
 import { currentLang } from "~/app/i18n"
 import { getSettingBool } from "~/store"
 import {
@@ -16,13 +11,31 @@ import {
   Obj,
 } from "~/types"
 import { danmakuComments, danmakuSearch, ext } from "~/utils"
+import {
+  createDefaultDanmakuConfig,
+  loadDanmakuConfig,
+  saveDanmakuConfig,
+  type DanmakuConfig,
+  type DanmakuDisplayArea,
+  type DanmakuEngineMode,
+  type DanmakuFontFamily,
+  type DanmakuFontWeight,
+  type DanmakuOutline,
+  type DanmakuSpacing,
+  type DanmakuSpeed,
+} from "./danmaku-config"
+import { normalizeComments, parseBilibiliXml } from "./danmaku-data"
+import { DanmuJsRenderer } from "./danmaku-renderer"
 
 const MAPPINGS_KEY = "openlist_danmaku_mappings_v1"
 const PANEL_ID = "openlist-danmaku-panel"
 
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`
+const SETTINGS_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"></path><path d="M18 7h2"></path><circle cx="16" cy="7" r="2"></circle><path d="M4 17h2"></path><path d="M10 17h10"></path><circle cx="8" cy="17" r="2"></circle></svg>`
+const DANMAKU_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>`
 
 type DanmakuSource = "none" | "local" | "online"
+type DanmakuPanelTab = "source" | "display"
 
 export interface DanmakuControllerOptions {
   player: () => Artplayer | undefined
@@ -37,14 +50,16 @@ export interface DanmakuControllerOptions {
 export class DanmakuController {
   private readonly options: DanmakuControllerOptions
   private player?: Artplayer
-  private plugin?: DanmukuResult
+  private renderer?: DanmuJsRenderer
   private panel?: HTMLDivElement
   private panelOpen = false
+  private panelTab: DanmakuPanelTab = "source"
   private searchInput?: HTMLInputElement
   private statusElement?: HTMLDivElement
   private matchElement?: HTMLDivElement
   private candidatesElement?: HTMLDivElement
   private sourceElement?: HTMLDivElement
+  private toggleControl?: HTMLElement
   private abortController?: AbortController
   private generation = 0
   private activeKey = ""
@@ -54,6 +69,7 @@ export class DanmakuController {
   private loading = false
   private destroyed = false
   private loadQueue: Promise<void> = Promise.resolve()
+  private config: DanmakuConfig = createDefaultDanmakuConfig()
 
   constructor(options: DanmakuControllerOptions) {
     this.options = options
@@ -64,47 +80,29 @@ export class DanmakuController {
     if (!player) return
     if (!player.isReady) {
       await new Promise<void>((resolve) => {
-        player.once("ready", () => resolve())
+        if (player.isReady) resolve()
+        else player.once("ready", () => resolve())
       })
     }
     if (this.destroyed) return
-    this.player = player
 
-    if (!player.plugins.artplayerPluginDanmuku) {
-      await player.plugins.add(
-        artplayerPluginDanmuku({
-          speed: 5,
-          opacity: 1,
-          fontSize: 25,
-          mode: 0,
-          antiOverlap: false,
-          synchronousPlayback: false,
-          theme: "dark",
-          heatmap: true,
-          ...JSON.parse(localStorage.getItem("danmuku_config") || "{}"),
-          emitter: false,
-          danmuku: [],
-        }),
-      )
-    }
-    if (this.destroyed) return
-    this.plugin = player.plugins
-      .artplayerPluginDanmuku as unknown as DanmukuResult
-    this.bindConfig()
-    this.addControl()
+    this.player = player
+    this.config = loadDanmakuConfig()
+    this.renderer = new DanmuJsRenderer(player, this.config)
+    this.addControls()
     this.createPanel()
     this.reload()
   }
 
   reload() {
-    if (!this.player || !this.plugin) return
+    if (!this.player || !this.renderer) return
     const key = this.mappingKey()
     if (key !== this.activeKey) {
       this.activeKey = key
       this.lastQuery = ""
       this.currentSource = "none"
       this.currentMatch = undefined
-      void this.resetPlugin()
+      this.renderer.reset()
       this.candidatesElement?.replaceChildren()
       this.renderMatch()
       this.setStatus("")
@@ -116,18 +114,34 @@ export class DanmakuController {
     void this.restorePriority(requestGeneration, key)
   }
 
-  openPanel() {
+  openPanel(tab: DanmakuPanelTab = "source") {
+    this.setPanelTab(tab)
     this.setPanelOpen(true)
   }
 
   destroy() {
+    if (this.destroyed) return
     this.destroyed = true
-    this.generation++
+    this.generation += 1
     this.abortController?.abort()
     this.panel?.remove()
-    this.player?.controls.remove("danmaku-search")
+
+    if (this.player) {
+      for (const name of [
+        "danmaku-search",
+        "danmaku-settings",
+        "danmaku-toggle",
+      ]) {
+        if (this.player.controls[name]) {
+          this.player.controls.remove(name)
+        }
+      }
+    }
+
+    this.renderer?.destroy()
+    this.renderer = undefined
+    this.toggleControl = undefined
     this.player = undefined
-    this.plugin = undefined
   }
 
   private async restorePriority(generation: number, key: string) {
@@ -167,28 +181,34 @@ export class DanmakuController {
   }
 
   private async loadLocal(generation: number) {
-    const player = this.player
-    const plugin = this.plugin
+    const renderer = this.renderer
     const local = this.options.getLocalXml?.()
     const url = local ? this.options.getLocalXmlUrl?.(local) : ""
-    if (
-      !player ||
-      !plugin ||
-      !local ||
-      !url ||
-      generation !== this.generation
-    ) {
+    if (!renderer || !local || !url || generation !== this.generation) {
       return
     }
+
+    const controller = new AbortController()
+    this.abortController = controller
     this.loading = true
     this.setStatus(this.text("正在加载本地 XML", "Loading local XML"))
+
     try {
-      await this.queuePluginLoad(async () => {
-        plugin.reset()
-        plugin.option.danmuku = []
-        await plugin.load(url)
-      }, generation)
-      if (generation !== this.generation) return
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const xml = await response.text()
+      if (generation !== this.generation || controller.signal.aborted) {
+        return
+      }
+      const comments = parseBilibiliXml(xml)
+      const loaded = await this.queueRendererLoad(
+        () => renderer.load(comments, controller.signal),
+        generation,
+      )
+      if (!loaded || generation !== this.generation) return
+
       this.currentSource = "local"
       this.currentMatch = {
         anime_id: 0,
@@ -201,9 +221,8 @@ export class DanmakuController {
       this.renderMatch()
       this.setStatus(this.text("已使用本地 XML", "Using local XML"))
     } catch (error) {
-      if (generation === this.generation) {
-        this.setStatus(errorMessage(error))
-      }
+      if (generation !== this.generation || controller.signal.aborted) return
+      this.setStatus(errorMessage(error))
     } finally {
       if (generation === this.generation) {
         this.loading = false
@@ -285,6 +304,9 @@ export class DanmakuController {
     saveMapping: boolean,
   ): Promise<boolean> {
     if (!getSettingBool("danmaku_enabled")) return false
+    const renderer = this.renderer
+    if (!renderer) return false
+
     const generation = ++this.generation
     this.abortController?.abort()
     const controller = new AbortController()
@@ -319,12 +341,15 @@ export class DanmakuController {
       this.openPanel()
       return false
     }
+
     const result: DanmakuCommentsResult = response.data
+    const comments = normalizeComments(result.comments)
     try {
-      await this.queuePluginLoad(
-        () => this.loadIntoPlayer(result.comments),
+      const loaded = await this.queueRendererLoad(
+        () => renderer.load(comments, controller.signal),
         generation,
       )
+      if (!loaded) return false
     } catch (error) {
       if (generation !== this.generation) return false
       this.setStatus(errorMessage(error))
@@ -332,6 +357,7 @@ export class DanmakuController {
       return false
     }
     if (generation !== this.generation) return false
+
     this.currentSource = "online"
     this.currentMatch = match
     this.renderMatch()
@@ -343,8 +369,8 @@ export class DanmakuController {
       : ""
     this.setStatus(
       this.text(
-        `已加载 ${result.count} 条弹幕${partial}`,
-        `Loaded ${result.count} danmaku${partial}`,
+        `已加载 ${comments.length} 条弹幕${partial}`,
+        `Loaded ${comments.length} danmaku${partial}`,
       ),
     )
     if (saveMapping) {
@@ -353,92 +379,78 @@ export class DanmakuController {
     return true
   }
 
-  private async loadIntoPlayer(comments: Danmu[]) {
-    const plugin = this.plugin
-    if (!plugin) return
-    plugin.reset()
-    plugin.option.danmuku = []
-    await plugin.load(comments)
-  }
-
-  private async resetPlugin() {
-    const plugin = this.plugin
-    if (!plugin) return
-    this.loadQueue = this.loadQueue
-      .catch(() => undefined)
-      .then(() => {
-        plugin.reset()
-        plugin.option.danmuku = []
-      })
-    await this.loadQueue
-  }
-
-  private queuePluginLoad(
-    load: () => Promise<unknown>,
+  private queueRendererLoad<T>(
+    load: () => Promise<T>,
     generation: number,
-  ): Promise<void> {
+  ): Promise<T | undefined> {
     const next = this.loadQueue
       .catch(() => undefined)
       .then(async () => {
         if (generation !== this.generation || this.destroyed) return
-        await load()
+        return load()
       })
-    this.loadQueue = next
+    this.loadQueue = next.then(
+      () => undefined,
+      () => undefined,
+    )
     return next
   }
 
-  private bindConfig() {
-    this.player?.on("artplayerPluginDanmuku:config", (option) => {
-      const {
-        speed,
-        margin,
-        opacity,
-        mode,
-        modes,
-        fontSize,
-        antiOverlap,
-        synchronousPlayback,
-        heatmap,
-        visible,
-      } = option as DanmukuOption
-      localStorage.setItem(
-        "danmuku_config",
-        JSON.stringify({
-          speed,
-          margin,
-          opacity,
-          mode,
-          modes,
-          fontSize,
-          antiOverlap,
-          synchronousPlayback,
-          heatmap,
-          visible,
-        }),
-      )
-    })
-  }
+  private addControls() {
+    const player = this.player
+    if (!player) return
 
-  private addControl() {
-    if (!this.player || this.player.controls["danmaku-search"]) return
-    this.player.controls.add({
-      name: "danmaku-search",
-      index: 12,
-      position: "right",
-      html: SEARCH_ICON,
-      tooltip: this.text("弹幕", "Danmaku"),
-      click: () => this.openPanel(),
-    })
+    if (!player.controls["danmaku-search"]) {
+      player.controls.add({
+        name: "danmaku-search",
+        index: 12,
+        position: "right",
+        html: SEARCH_ICON,
+        tooltip: this.text("弹幕搜索", "Danmaku search"),
+        click: () => this.openPanel("source"),
+      })
+    }
+
+    if (!player.controls["danmaku-settings"]) {
+      player.controls.add({
+        name: "danmaku-settings",
+        index: 13,
+        position: "right",
+        html: SETTINGS_ICON,
+        tooltip: this.text("弹幕设置", "Danmaku settings"),
+        click: () => this.openPanel("display"),
+      })
+    }
+
+    if (!player.controls["danmaku-toggle"]) {
+      this.toggleControl = player.controls.add({
+        name: "danmaku-toggle",
+        index: 14,
+        position: "right",
+        html: DANMAKU_ICON,
+        tooltip: this.text("弹幕开关", "Toggle danmaku"),
+        click: () => {
+          const next = {
+            ...this.config,
+            modes: { ...this.config.modes },
+            visible: !this.config.visible,
+          }
+          this.applyConfig(next)
+        },
+      })
+    }
+    this.syncToggleControl()
   }
 
   private createPanel() {
     const player = this.player
     if (!player || this.panel) return
+
     const panel = document.createElement("div")
     panel.id = PANEL_ID
     panel.className = "openlist-danmaku-panel"
     panel.setAttribute("role", "dialog")
-    panel.setAttribute("aria-label", this.text("弹幕搜索", "Danmaku search"))
+    panel.setAttribute("aria-label", this.text("弹幕", "Danmaku"))
     panel.innerHTML = `
       <div class="openlist-danmaku-panel__header">
         <div>
@@ -447,18 +459,107 @@ export class DanmakuController {
         </div>
         <button type="button" data-action="close" aria-label="${this.text("关闭", "Close")}">×</button>
       </div>
-      <div class="openlist-danmaku-actions">
-        <button type="button" data-action="local">${this.text("恢复本地 XML", "Restore local XML")}</button>
-        <button type="button" data-action="online">${this.text("在线聚合", "Online")}</button>
-        <button type="button" data-action="clear">${this.text("清除匹配", "Clear match")}</button>
+      <div class="openlist-danmaku-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="source" data-active="true">${this.text("来源", "Source")}</button>
+        <button type="button" role="tab" data-tab="display" data-active="false">${this.text("显示", "Display")}</button>
       </div>
-      <form class="openlist-danmaku-search">
-        <input type="search" maxlength="256" autocomplete="off" placeholder="${this.text("剧名 S01E01", "Title S01E01")}" />
-        <button type="submit">${SEARCH_ICON}</button>
-      </form>
-      <div class="openlist-danmaku-status" role="status"></div>
-      <div class="openlist-danmaku-match"></div>
-      <div class="openlist-danmaku-candidates"></div>
+      <div class="openlist-danmaku-tab-panel" data-tab-panel="source">
+        <div class="openlist-danmaku-actions">
+          <button type="button" data-action="local">${this.text("恢复本地 XML", "Restore local XML")}</button>
+          <button type="button" data-action="online">${this.text("在线聚合", "Online")}</button>
+          <button type="button" data-action="clear">${this.text("清除匹配", "Clear match")}</button>
+        </div>
+        <form class="openlist-danmaku-search">
+          <input type="search" maxlength="256" autocomplete="off" placeholder="${this.text("剧名 S01E01", "Title S01E01")}" />
+          <button type="submit">${SEARCH_ICON}</button>
+        </form>
+        <div class="openlist-danmaku-status" role="status"></div>
+        <div class="openlist-danmaku-match"></div>
+        <div class="openlist-danmaku-candidates"></div>
+      </div>
+      <div class="openlist-danmaku-tab-panel" data-tab-panel="display" data-active="false">
+        <div class="openlist-danmaku-settings">
+          <section class="openlist-danmaku-settings-group">
+            <div class="openlist-danmaku-settings-title">${this.text("显示模式", "Display modes")}</div>
+            <div class="openlist-danmaku-checks">
+              <label><input type="checkbox" data-danmaku-mode="scroll" /><span>${this.text("滚动", "Scroll")}</span></label>
+              <label><input type="checkbox" data-danmaku-mode="top" /><span>${this.text("顶部", "Top")}</span></label>
+              <label><input type="checkbox" data-danmaku-mode="bottom" /><span>${this.text("底部", "Bottom")}</span></label>
+            </div>
+          </section>
+          <section class="openlist-danmaku-settings-group">
+            <div class="openlist-danmaku-setting-row">
+              <span>${this.text("字体", "Font")}</span>
+              <div class="openlist-danmaku-segmented" data-danmaku-segment="fontFamily">
+                <button type="button" data-value="system">${this.text("默认", "Default")}</button>
+                <button type="button" data-value="sans">${this.text("黑体", "Sans")}</button>
+                <button type="button" data-value="serif">${this.text("宋体", "Serif")}</button>
+                <button type="button" data-value="rounded">${this.text("圆体", "Rounded")}</button>
+                <button type="button" data-value="monospace">${this.text("等宽", "Mono")}</button>
+              </div>
+            </div>
+            <div class="openlist-danmaku-setting-row">
+              <span>${this.text("粗细", "Weight")}</span>
+              <div class="openlist-danmaku-segmented" data-danmaku-segment="fontWeight">
+                <button type="button" data-value="normal">${this.text("常规", "Normal")}</button>
+                <button type="button" data-value="bold">${this.text("粗体", "Bold")}</button>
+              </div>
+            </div>
+            <label class="openlist-danmaku-range">
+              <span>${this.text("字号", "Font size")}</span>
+              <input type="range" min="16" max="36" step="1" data-danmaku-setting="fontSize" />
+              <output data-danmaku-output="fontSize"></output>
+            </label>
+            <label class="openlist-danmaku-range">
+              <span>${this.text("描边", "Outline")}</span>
+              <input type="range" min="0" max="5" step="1" data-danmaku-setting="outline" />
+              <output data-danmaku-output="outline"></output>
+            </label>
+            <label class="openlist-danmaku-range">
+              <span>${this.text("透明度", "Opacity")}</span>
+              <input type="range" min="10" max="100" step="5" data-danmaku-setting="opacity" />
+              <output data-danmaku-output="opacity"></output>
+            </label>
+          </section>
+          <section class="openlist-danmaku-settings-group">
+            <div class="openlist-danmaku-setting-row">
+              <span>${this.text("显示区域", "Display area")}</span>
+              <div class="openlist-danmaku-segmented" data-danmaku-segment="displayArea">
+                <button type="button" data-value="25">25%</button>
+                <button type="button" data-value="50">50%</button>
+                <button type="button" data-value="75">75%</button>
+                <button type="button" data-value="90">90%</button>
+                <button type="button" data-value="100">100%</button>
+              </div>
+            </div>
+            <div class="openlist-danmaku-setting-row">
+              <span>${this.text("速度", "Speed")}</span>
+              <div class="openlist-danmaku-segmented" data-danmaku-segment="speed">
+                <button type="button" data-value="0.75">0.75x</button>
+                <button type="button" data-value="1">1x</button>
+                <button type="button" data-value="1.25">1.25x</button>
+                <button type="button" data-value="1.5">1.5x</button>
+              </div>
+            </div>
+            <div class="openlist-danmaku-setting-row">
+              <span>${this.text("间距", "Spacing")}</span>
+              <div class="openlist-danmaku-segmented" data-danmaku-segment="spacing">
+                <button type="button" data-value="0">${this.text("紧凑", "Compact")}</button>
+                <button type="button" data-value="100">${this.text("标准", "Normal")}</button>
+                <button type="button" data-value="250">${this.text("宽松", "Wide")}</button>
+              </div>
+            </div>
+          </section>
+          <section class="openlist-danmaku-settings-group">
+            <div class="openlist-danmaku-checks openlist-danmaku-checks--stacked">
+              <label><input type="checkbox" data-danmaku-setting="antiOverlap" /><span>${this.text("防止重叠", "Prevent overlap")}</span></label>
+              <label><input type="checkbox" data-danmaku-setting="followPlaybackRate" /><span>${this.text("跟随视频倍速", "Follow playback rate")}</span></label>
+              <label><input type="checkbox" data-danmaku-setting="heatmap" /><span>${this.text("热度图", "Heatmap")}</span></label>
+              <label><input type="checkbox" data-danmaku-setting="traditionalToSimplified" /><span>${this.text("繁体转简体", "Traditional to Simplified")}</span></label>
+            </div>
+          </section>
+        </div>
+      </div>
     `
     player.template.$player.appendChild(panel)
     this.panel = panel
@@ -474,7 +575,34 @@ export class DanmakuController {
 
     panel.addEventListener("pointerdown", (event) => event.stopPropagation())
     panel.addEventListener("mousedown", (event) => event.stopPropagation())
-    panel.addEventListener("click", (event) => event.stopPropagation())
+    panel.addEventListener("click", (event) => {
+      event.stopPropagation()
+      const target = event.target as HTMLElement
+      const tab = target.closest<HTMLElement>("[data-tab]")?.dataset.tab
+      if (tab === "source" || tab === "display") {
+        this.setPanelTab(tab)
+        return
+      }
+
+      const segment = target.closest<HTMLElement>("[data-danmaku-segment]")
+      const button = target.closest<HTMLButtonElement>("[data-value]")
+      if (segment && button) {
+        this.applySegmentValue(segment, button)
+      }
+    })
+    panel.addEventListener("input", (event) => {
+      const target = event.target
+      if (target instanceof HTMLInputElement && target.type === "range") {
+        this.applyControlValue(target)
+      }
+    })
+    panel.addEventListener("change", (event) => {
+      const target = event.target
+      if (target instanceof HTMLInputElement && target.type === "checkbox") {
+        this.applyControlValue(target)
+      }
+    })
+
     panel
       .querySelector("[data-action='close']")
       ?.addEventListener("click", () => {
@@ -501,6 +629,163 @@ export class DanmakuController {
       this.abortController?.abort()
       void this.search(this.searchInput?.value || "", generation, true)
     })
+
+    this.syncConfigControls()
+  }
+
+  private applyControlValue(input: HTMLInputElement) {
+    const setting = input.dataset.danmakuSetting
+    const mode = input.dataset.danmakuMode as DanmakuEngineMode | undefined
+    const next: DanmakuConfig = {
+      ...this.config,
+      modes: { ...this.config.modes },
+    }
+
+    if (mode) {
+      next.modes[mode] = input.checked
+    } else if (setting === "fontSize") {
+      next.fontSize = clamp(Number(input.value), 16, 36)
+    } else if (setting === "outline") {
+      next.outline = clamp(
+        Math.round(Number(input.value)),
+        0,
+        5,
+      ) as DanmakuOutline
+    } else if (setting === "opacity") {
+      next.opacity = clamp(Number(input.value) / 100, 0.1, 1)
+    } else if (setting === "antiOverlap") {
+      next.antiOverlap = input.checked
+    } else if (setting === "followPlaybackRate") {
+      next.followPlaybackRate = input.checked
+    } else if (setting === "heatmap") {
+      next.heatmap = input.checked
+    } else if (setting === "traditionalToSimplified") {
+      next.traditionalToSimplified = input.checked
+    } else {
+      return
+    }
+
+    this.applyConfig(next)
+  }
+
+  private applySegmentValue(segment: HTMLElement, button: HTMLButtonElement) {
+    const setting = segment.dataset.danmakuSegment
+    const value = button.dataset.value
+    const next: DanmakuConfig = {
+      ...this.config,
+      modes: { ...this.config.modes },
+    }
+
+    if (setting === "displayArea") {
+      next.displayArea = Number(value) as DanmakuDisplayArea
+    } else if (setting === "speed") {
+      next.speed = Number(value) as DanmakuSpeed
+    } else if (setting === "spacing") {
+      next.spacing = Number(value) as DanmakuSpacing
+    } else if (setting === "fontFamily") {
+      next.fontFamily = value as DanmakuFontFamily
+    } else if (setting === "fontWeight") {
+      next.fontWeight = value as DanmakuFontWeight
+    } else {
+      return
+    }
+    this.applyConfig(next)
+  }
+
+  private applyConfig(config: DanmakuConfig) {
+    this.config = config
+    saveDanmakuConfig(config)
+    void this.renderer?.updateConfig(config)
+    this.syncConfigControls()
+    this.syncToggleControl()
+  }
+
+  private syncConfigControls() {
+    const panel = this.panel
+    if (!panel) return
+
+    for (const mode of ["scroll", "top", "bottom"] as const) {
+      const input = panel.querySelector<HTMLInputElement>(
+        `[data-danmaku-mode="${mode}"]`,
+      )
+      if (input) input.checked = this.config.modes[mode]
+    }
+
+    const fontSize = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='fontSize']",
+    )
+    if (fontSize) fontSize.value = String(this.config.fontSize)
+    const opacity = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='opacity']",
+    )
+    if (opacity) opacity.value = String(Math.round(this.config.opacity * 100))
+    const outline = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='outline']",
+    )
+    if (outline) outline.value = String(this.config.outline)
+
+    const fontSizeOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='fontSize']",
+    )
+    if (fontSizeOutput) fontSizeOutput.value = `${this.config.fontSize}px`
+    const opacityOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='opacity']",
+    )
+    if (opacityOutput) {
+      opacityOutput.value = `${Math.round(this.config.opacity * 100)}%`
+    }
+    const outlineOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='outline']",
+    )
+    if (outlineOutput) {
+      outlineOutput.value = this.outlineLabel(this.config.outline)
+    }
+
+    this.syncSegmentState("displayArea", String(this.config.displayArea))
+    this.syncSegmentState("speed", String(this.config.speed))
+    this.syncSegmentState("spacing", String(this.config.spacing))
+    this.syncSegmentState("fontFamily", this.config.fontFamily)
+    this.syncSegmentState("fontWeight", this.config.fontWeight)
+
+    for (const setting of [
+      "antiOverlap",
+      "followPlaybackRate",
+      "heatmap",
+      "traditionalToSimplified",
+    ] as const) {
+      const input = panel.querySelector<HTMLInputElement>(
+        `[data-danmaku-setting="${setting}"]`,
+      )
+      if (input) input.checked = this.config[setting]
+    }
+  }
+
+  private syncSegmentState(setting: string, value: string) {
+    const buttons = this.panel?.querySelectorAll<HTMLButtonElement>(
+      `[data-danmaku-segment="${setting}"] [data-value]`,
+    )
+    buttons?.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.value === value)
+    })
+  }
+
+  private syncToggleControl() {
+    this.toggleControl?.classList.toggle("is-active", this.config.visible)
+    this.toggleControl?.setAttribute(
+      "aria-pressed",
+      String(this.config.visible),
+    )
+  }
+
+  private outlineLabel(value: DanmakuOutline) {
+    return [
+      this.text("无", "None"),
+      this.text("极细", "Hairline"),
+      this.text("细", "Thin"),
+      this.text("标准", "Normal"),
+      this.text("粗", "Bold"),
+      this.text("极粗", "Heavy"),
+    ][value]
   }
 
   private async restoreLocal() {
@@ -678,8 +963,24 @@ export class DanmakuController {
       if (!this.searchInput?.value) {
         this.setInputValue(this.defaultQuery())
       }
-      window.setTimeout(() => this.searchInput?.focus(), 0)
+      if (this.panelTab === "source") {
+        window.setTimeout(() => this.searchInput?.focus(), 0)
+      }
     }
+  }
+
+  private setPanelTab(tab: DanmakuPanelTab) {
+    this.panelTab = tab
+    this.panel
+      ?.querySelectorAll<HTMLElement>("[data-tab]")
+      .forEach((button) => {
+        button.dataset.active = String(button.dataset.tab === tab)
+      })
+    this.panel
+      ?.querySelectorAll<HTMLElement>("[data-tab-panel]")
+      .forEach((panel) => {
+        panel.dataset.active = String(panel.dataset.tabPanel === tab)
+      })
   }
 
   private defaultQuery() {
@@ -749,4 +1050,8 @@ function textElement(tag: string, className: string, text: string) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
 }
