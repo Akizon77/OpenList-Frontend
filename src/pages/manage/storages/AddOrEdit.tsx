@@ -19,7 +19,7 @@ import {
   Type,
 } from "~/types"
 import { createStore, produce } from "solid-js/store"
-import { Item } from "./Item"
+import { Item, type ItemProps } from "./Item"
 import { ResponsiveGrid } from "../common/ResponsiveGrid"
 
 interface DriverInfo {
@@ -165,6 +165,7 @@ const AddOrEdit = () => {
               <Item
                 {...item}
                 driver="common"
+                type={item.type as ItemProps["type"]}
                 value={(storage as any)[item.name]}
                 onChange={(val: any) => {
                   setStorage(item.name as keyof Storage, val)
@@ -177,6 +178,7 @@ const AddOrEdit = () => {
               <Item
                 {...item}
                 driver={storage.driver}
+                type={item.type as ItemProps["type"]}
                 value={addition[item.name] as any}
                 onChange={(val: any) => {
                   setAddition(item.name, val)

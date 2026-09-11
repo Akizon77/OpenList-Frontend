@@ -31,8 +31,6 @@ import Artplayer from "artplayer"
 import { type Option } from "artplayer"
 import { type Setting } from "artplayer"
 import { type Events } from "artplayer"
-import artplayerPluginDanmuku from "artplayer-plugin-danmuku"
-import { type Option as DanmukuOption } from "artplayer-plugin-danmuku"
 import artplayerPluginAss from "~/components/artplayer-plugin-ass"
 import mpegts from "mpegts.js"
 import Hls from "hls.js"
@@ -40,6 +38,8 @@ import { currentLang } from "~/app/i18n"
 import { AutoHeightPlugin, VideoBox } from "./video_box"
 import { ArtPlayerIconsSubtitle } from "~/components/icons"
 import { useNavigate } from "@solidjs/router"
+import { DanmakuController } from "./danmaku"
+import { sortSubtitlesByLanguage } from "./subtitle"
 import "./artplayer.css"
 
 const Preview = () => {
@@ -78,6 +78,7 @@ const Preview = () => {
   let player: Artplayer
   let flvPlayer: mpegts.Player
   let hlsPlayer: Hls
+  let danmakuController: DanmakuController
   let option: Option = {
     container: "#video-player",
     volume: 1.0,
@@ -191,24 +192,28 @@ const Preview = () => {
         danmu = obj
       }
     }
-    return { subtitle, danmu }
+    return { subtitle: sortSubtitlesByLanguage(subtitle), danmu }
   })
 
   // TODO: add a switch in manage panel to choose whether to enable `libass-wasm`
   const enableEnhanceAss = true
 
-  const switchUrl = (url: string, resumeSeconds?: number) => {
+  const switchUrl = (
+    url: string,
+    resumeSeconds?: number,
+    type = ext(objStore.obj.name),
+  ) => {
     const { playing } = player
     player.pause()
     player.option.id = pathname()
-    player.option.type = ext(objStore.obj.name)
+    player.option.type = type
     return player
       .switchUrl(url)
       .then(() => {
         if (resumeSeconds && resumeSeconds > 0) {
           player.currentTime = resumeSeconds
         }
-        const { subtitle, danmu } = subtitleAndDanmu()
+        const { subtitle } = subtitleAndDanmu()
         let isEnhanceAssMode = false
         const setSubtitleVisible = (visible: boolean) => {
           const type = isEnhanceAssMode ? "ass" : "webvtt"
@@ -250,33 +255,26 @@ const Preview = () => {
             },
           ]
           subtitle.forEach((item, i) => {
+            const subtitleType = ext(item.name).toLowerCase()
             innerMenu.push({
               default: i === 0,
               html: (
-                <span
-                  title={item.name}
-                  style={{
-                    "max-width": "200px",
-                    overflow: "hidden",
-                    "text-overflow": "ellipsis",
-                    "word-break": "break-all",
-                    "white-space": "normal",
-                    display: "-webkit-box",
-                    "-webkit-line-clamp": "2",
-                    "-webkit-box-orient": "vertical",
-                    "font-size": "12px",
-                  }}
-                >
-                  {item.name}
+                <span class="openlist-subtitle-option" title={item.name}>
+                  <span class="openlist-subtitle-option__name">
+                    {item.name}
+                  </span>
                 </span>
               ) as HTMLElement,
               name: item.name,
               url: proxyLink(item, true),
+              type: subtitleType,
+              tooltip: subtitleType.toUpperCase(),
+              value: "openlist-subtitle-track",
             })
           })
 
           const onSelect = function (this: Artplayer, item: Setting) {
-            if (enableEnhanceAss && ext(item.name).toLowerCase() === "ass") {
+            if (enableEnhanceAss && item.type === "ass") {
               isEnhanceAssMode = true
               if (!player.plugins.artplayerPluginAss) {
                 player.plugins.add(artplayerPluginAss({ subUrl: item.url }))
@@ -289,7 +287,10 @@ const Preview = () => {
               setSubtitleVisible(true)
             } else {
               isEnhanceAssMode = false
-              this.subtitle.switch(item.url, { name: item.name })
+              this.subtitle.switch(item.url, {
+                name: item.name,
+                type: item.type,
+              })
               this.once("subtitleLoad", setSubtitleVisible.bind(this, true))
             }
 
@@ -316,60 +317,7 @@ const Preview = () => {
             player.setting.remove("setting_subtitle")
           setSubtitleVisible(false)
         }
-        const danmukuPlugin = player.plugins
-          .artplayerPluginDanmuku as ReturnType<
-          ReturnType<typeof artplayerPluginDanmuku>
-        >
-        if (danmukuPlugin) {
-          danmukuPlugin.reset()
-          danmukuPlugin.option.danmuku = []
-          danmukuPlugin.load(danmu ? proxyLink(danmu, true) : undefined)
-        } else if (danmu) {
-          player.plugins.add(
-            artplayerPluginDanmuku({
-              speed: 5,
-              opacity: 1,
-              fontSize: 25,
-              mode: 0,
-              antiOverlap: false,
-              synchronousPlayback: false,
-              theme: "dark",
-              heatmap: true,
-              ...JSON.parse(localStorage.getItem("danmuku_config") || "{}"),
-              emitter: false,
-              danmuku: proxyLink(danmu, true),
-            }),
-          )
-          player.on("artplayerPluginDanmuku:config", (option) => {
-            const {
-              speed,
-              margin,
-              opacity,
-              mode,
-              modes,
-              fontSize,
-              antiOverlap,
-              synchronousPlayback,
-              heatmap,
-              visible,
-            } = option as DanmukuOption
-            localStorage.setItem(
-              "danmuku_config",
-              JSON.stringify({
-                speed,
-                margin,
-                opacity,
-                mode,
-                modes,
-                fontSize,
-                antiOverlap,
-                synchronousPlayback,
-                heatmap,
-                visible,
-              }),
-            )
-          })
-        }
+        danmakuController?.reload()
       })
       .finally(() => playing && player.play())
   }
@@ -437,7 +385,11 @@ const Preview = () => {
       activeEmbyPath = requestPath
       activeEmbySessionID = ""
       lastEmbyProgressAt = 0
-      await switchUrl(url, ticksToSeconds(info.playback_position_ticks))
+      await switchUrl(
+        info.playback_url || url,
+        ticksToSeconds(info.playback_position_ticks),
+        info.playback_type || ext(objStore.obj.name),
+      )
       startEmbyPlayback()
     } catch (error) {
       if (requestID !== embyRequestVersion) return
@@ -451,6 +403,32 @@ const Preview = () => {
 
   onMount(() => {
     player = new Artplayer(option)
+    danmakuController = new DanmakuController({
+      player: () => player,
+      getPath: () => pathname(),
+      getPassword: () => password(),
+      getMedia: () => {
+        const info = embyInfo()
+        if (!info) {
+          return {
+            name: objStore.obj.name,
+            parent_name: pathDir(pathname()).split("/").pop(),
+          }
+        }
+        return {
+          item_id: info.item_id,
+          item_type: info.item_type,
+          name: info.name,
+          series_name: info.series_name,
+          original_title: info.original_title,
+          season_number: info.season_number,
+          episode_number: info.episode_number,
+        }
+      },
+      getLocalXml: () => subtitleAndDanmu().danmu,
+      getLocalXmlUrl: (obj) => proxyLink(obj, true),
+    })
+    void danmakuController.init()
     createEffect(
       on(
         () => objStore.raw_url,
@@ -530,6 +508,7 @@ const Preview = () => {
       void reportEmbyPlayback("playback_stop")
     }
     setShouldKeepState(false)
+    danmakuController?.destroy()
     if (player) {
       player.fullscreenWeb = false
       player.fullscreen = false

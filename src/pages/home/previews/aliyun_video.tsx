@@ -14,8 +14,6 @@ import Artplayer from "artplayer"
 import { type Option } from "artplayer"
 import { type Setting } from "artplayer"
 import { type Events } from "artplayer"
-import artplayerPluginDanmuku from "artplayer-plugin-danmuku"
-import { type Option as DanmukuOption } from "artplayer-plugin-danmuku"
 import artplayerPluginAss from "~/components/artplayer-plugin-ass"
 import Hls from "hls.js"
 import { currentLang } from "~/app/i18n"
@@ -23,6 +21,8 @@ import { AutoHeightPlugin, VideoBox } from "./video_box"
 import { ArtPlayerIconsSubtitle } from "~/components/icons"
 import { useNavigate } from "@solidjs/router"
 import { TiWarning } from "solid-icons/ti"
+import { DanmakuController } from "./danmaku"
+import { sortSubtitlesByLanguage } from "./subtitle"
 import "./artplayer.css"
 
 export interface Data {
@@ -156,14 +156,17 @@ const Preview = () => {
     airplay: true,
   }
 
-  const subtitle = objStore.related.filter((obj) => {
-    for (const ext of [".srt", ".ass", ".vtt"]) {
-      if (obj.name.endsWith(ext)) {
-        return true
+  const subtitle = sortSubtitlesByLanguage(
+    objStore.related.filter((obj) => {
+      const name = obj.name.toLowerCase()
+      for (const extension of [".srt", ".ass", ".vtt"]) {
+        if (name.endsWith(extension)) {
+          return true
+        }
       }
-    }
-    return false
-  })
+      return false
+    }),
+  )
   const danmu = objStore.related.find((obj) => {
     for (const ext of [".xml"]) {
       if (obj.name.endsWith(ext)) {
@@ -192,7 +195,7 @@ const Preview = () => {
     } else {
       option.subtitle = {
         url: proxyLink(defaultSubtitle, true),
-        type: ext(defaultSubtitle.name),
+        type: ext(defaultSubtitle.name).toLowerCase(),
       }
     }
 
@@ -218,28 +221,19 @@ const Preview = () => {
       },
     ]
     subtitle.forEach((item, i) => {
+      const subtitleType = ext(item.name).toLowerCase()
       innerMenu.push({
         default: i === 0,
         html: (
-          <span
-            title={item.name}
-            style={{
-              "max-width": "200px",
-              overflow: "hidden",
-              "text-overflow": "ellipsis",
-              "word-break": "break-all",
-              "white-space": "normal",
-              display: "-webkit-box",
-              "-webkit-line-clamp": "2",
-              "-webkit-box-orient": "vertical",
-              "font-size": "12px",
-            }}
-          >
-            {item.name}
+          <span class="openlist-subtitle-option" title={item.name}>
+            <span class="openlist-subtitle-option__name">{item.name}</span>
           </span>
         ) as HTMLElement,
         name: item.name,
         url: proxyLink(item, true),
+        type: subtitleType,
+        tooltip: subtitleType.toUpperCase(),
+        value: "openlist-subtitle-track",
       })
     })
 
@@ -250,13 +244,16 @@ const Preview = () => {
       icon: ArtPlayerIconsSubtitle({ size: 24 }) as HTMLElement,
       selector: innerMenu,
       onSelect: function (item: Setting) {
-        if (enableEnhanceAss && ext(item.name).toLowerCase() === "ass") {
+        if (enableEnhanceAss && item.type === "ass") {
           isEnhanceAssMode = true
           this.emit("artplayer-plugin-ass:switch" as keyof Events, item.url)
           setSubtitleVisible(true)
         } else {
           isEnhanceAssMode = false
-          this.subtitle.switch(item.url, { name: item.name })
+          this.subtitle.switch(item.url, {
+            name: item.name,
+            type: item.type,
+          })
           this.once("subtitleLoad", setSubtitleVisible.bind(this, true))
         }
 
@@ -289,23 +286,7 @@ const Preview = () => {
     }
   }
 
-  if (danmu) {
-    option.plugins?.push(
-      artplayerPluginDanmuku({
-        speed: 5,
-        opacity: 1,
-        fontSize: 25,
-        mode: 0,
-        antiOverlap: false,
-        synchronousPlayback: false,
-        theme: "dark",
-        heatmap: true,
-        ...JSON.parse(localStorage.getItem("danmuku_config") || "{}"),
-        emitter: false,
-        danmuku: proxyLink(danmu, true),
-      }),
-    )
-  }
+  let danmakuController: DanmakuController
   const [, post] = useFetch((): PResp<Data> =>
     r.post("/fs/other", {
       path: pathname(),
@@ -334,6 +315,18 @@ const Preview = () => {
         }
       })
       player = new Artplayer(option)
+      danmakuController = new DanmakuController({
+        player: () => player,
+        getPath: () => pathname(),
+        getPassword: () => password(),
+        getMedia: () => ({
+          name: objStore.obj.name,
+          parent_name: pathDir(pathname()).split("/").pop(),
+        }),
+        getLocalXml: () => danmu,
+        getLocalXmlUrl: (obj) => proxyLink(obj, true),
+      })
+      void danmakuController.init()
       let auto_fullscreen: boolean
       switch (searchParams["auto_fullscreen"]) {
         case "true":
@@ -346,37 +339,6 @@ const Preview = () => {
       player.on("ready", () => {
         player.fullscreen = auto_fullscreen
       })
-      if (danmu) {
-        player.on("artplayerPluginDanmuku:config", (option) => {
-          const {
-            speed,
-            margin,
-            opacity,
-            mode,
-            modes,
-            fontSize,
-            antiOverlap,
-            synchronousPlayback,
-            heatmap,
-            visible,
-          } = option as DanmukuOption
-          localStorage.setItem(
-            "danmuku_config",
-            JSON.stringify({
-              speed,
-              margin,
-              opacity,
-              mode,
-              modes,
-              fontSize,
-              antiOverlap,
-              synchronousPlayback,
-              heatmap,
-              visible,
-            }),
-          )
-        })
-      }
       player.on("video:ended", () => {
         if (!autoNext()) return
         next_video()
@@ -425,6 +387,7 @@ const Preview = () => {
   }
   onCleanup(() => {
     setShouldKeepState(false)
+    danmakuController?.destroy()
     if (player) {
       player.fullscreenWeb = false
       player.fullscreen = false

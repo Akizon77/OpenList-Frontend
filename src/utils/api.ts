@@ -12,6 +12,9 @@ import {
   TorrentInfo,
   TorrentUploadParseResult,
   TorrentRapidUploadResult,
+  DanmakuMedia,
+  DanmakuSearchResult,
+  DanmakuCommentsResult,
 } from "~/types"
 import { r } from "."
 
@@ -66,6 +69,33 @@ export const fsOther = <T>(
     data,
     password,
   })
+}
+
+export const danmakuSearch = (
+  path: string,
+  password: string,
+  query: string,
+  media: DanmakuMedia | undefined,
+  signal?: AbortSignal,
+): PResp<DanmakuSearchResult> => {
+  return r.post(
+    "/fs/danmaku/search",
+    { path, password, query, media },
+    { signal },
+  )
+}
+
+export const danmakuComments = (
+  path: string,
+  password: string,
+  episodeID: number,
+  signal?: AbortSignal,
+): PResp<DanmakuCommentsResult> => {
+  return r.post(
+    "/fs/danmaku/comments",
+    { path, password, episode_id: episodeID },
+    { signal },
+  )
 }
 
 export const fsDirs = (
