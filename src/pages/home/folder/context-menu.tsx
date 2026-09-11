@@ -3,15 +3,25 @@ import { useCopyLink, useDownload, useLink, useRouter, useT } from "~/hooks"
 import "solid-contextmenu/dist/style.css"
 import { HStack, Icon, Text, useColorMode, Image } from "@hope-ui/solid"
 import { operations } from "../toolbar/operations"
-import { createMemo, For, Show } from "solid-js"
-import { bus, convertURL, notify, torrentParse } from "~/utils"
-import { ObjType, UserMethods } from "~/types"
+import { createMemo, createSignal, For, Show } from "solid-js"
+import {
+  buildPotPlayerURL,
+  bus,
+  convertURL,
+  fsGet,
+  isSubtitleFile,
+  notify,
+  pathJoin,
+  torrentParse,
+} from "~/utils"
+import { Obj, ObjType, UserMethods } from "~/types"
 import {
   getSettingBool,
   haveSelected,
   me,
   objStore,
   oneChecked,
+  password,
   selectedObjs,
   userCan,
 } from "~/store"
@@ -46,7 +56,38 @@ export const ContextMenu = () => {
     return UserMethods.is_admin(me()) || getSettingBool("package_download")
   }
   const { rawLink } = useLink()
-  const { isShare, pushHref, to } = useRouter()
+  const { isShare, pathname, pushHref, to } = useRouter()
+  const [potPlayerSubtitles, setPotPlayerSubtitles] = createSignal<Obj[]>([])
+  const potPlayerSubtitleCache = new Map<string, Promise<Obj[]>>()
+  let potPlayerRequestID = 0
+  const loadPotPlayerSubtitles = async (obj?: Obj) => {
+    if (!obj || obj.type !== ObjType.VIDEO) {
+      setPotPlayerSubtitles([])
+      return
+    }
+    const requestID = ++potPlayerRequestID
+    setPotPlayerSubtitles([])
+    const path = pathJoin(pathname(), obj.name)
+    let request = potPlayerSubtitleCache.get(path)
+    if (!request) {
+      request = fsGet(path, password())
+        .then((resp) => {
+          if (resp.code !== 200) throw new Error(resp.message)
+          return (resp.data.related ?? []).filter((item) =>
+            isSubtitleFile(item.name),
+          )
+        })
+        .catch((error) => {
+          console.warn("Failed to load PotPlayer subtitles", error)
+          return []
+        })
+      potPlayerSubtitleCache.set(path, request)
+    }
+    const subtitles = await request
+    if (requestID === potPlayerRequestID) {
+      setPotPlayerSubtitles(subtitles)
+    }
+  }
   const openWithPreviews = createMemo(() => {
     const objs = selectedObjs()
     if (objs.length !== 1) return []
@@ -202,27 +243,87 @@ export const ContextMenu = () => {
           }
         >
           <For each={players}>
-            {(player) => (
-              <Item
-                onClick={({ props }) => {
-                  const href = convertURL(player.scheme, {
-                    raw_url: "",
-                    name: props.name,
-                    d_url: rawLink(props, true),
-                  })
-                  window.open(href, "_self")
-                }}
-              >
-                <HStack spacing="$2">
-                  <Image
-                    m="0 auto"
-                    boxSize="$7"
-                    src={`${window.__dynamic_base__}/images/${player.icon}.webp`}
-                  />
-                  <Text>{player.name}</Text>
-                </HStack>
-              </Item>
-            )}
+            {(player) =>
+              player.name === "PotPlayer" ? (
+                <Submenu
+                  onMouseEnter={() => {
+                    void loadPotPlayerSubtitles(selectedObjs()[0])
+                  }}
+                  onClick={() => {
+                    void loadPotPlayerSubtitles(selectedObjs()[0])
+                  }}
+                  label={
+                    <HStack spacing="$2">
+                      <Image
+                        m="0 auto"
+                        boxSize="$7"
+                        src={`${window.__dynamic_base__}/images/${player.icon}.webp`}
+                      />
+                      <Text>{player.name}</Text>
+                    </HStack>
+                  }
+                >
+                  <Item
+                    onClick={({ props }) => {
+                      window.open(
+                        buildPotPlayerURL(rawLink(props, true)),
+                        "_self",
+                      )
+                    }}
+                  >
+                    {t("home.preview.no_subtitles")}
+                  </Item>
+                  <For each={potPlayerSubtitles()}>
+                    {(subtitle) => (
+                      <Item
+                        data={subtitle}
+                        onClick={({ props, data }) => {
+                          window.open(
+                            buildPotPlayerURL(
+                              rawLink(props, true),
+                              rawLink(data, true),
+                            ),
+                            "_self",
+                          )
+                        }}
+                      >
+                        <span
+                          title={subtitle.name}
+                          style={{
+                            "max-width": "240px",
+                            overflow: "hidden",
+                            "text-overflow": "ellipsis",
+                            "white-space": "nowrap",
+                          }}
+                        >
+                          {subtitle.name}
+                        </span>
+                      </Item>
+                    )}
+                  </For>
+                </Submenu>
+              ) : (
+                <Item
+                  onClick={({ props }) => {
+                    const href = convertURL(player.scheme, {
+                      raw_url: "",
+                      name: props.name,
+                      d_url: rawLink(props, true),
+                    })
+                    window.open(href, "_self")
+                  }}
+                >
+                  <HStack spacing="$2">
+                    <Image
+                      m="0 auto"
+                      boxSize="$7"
+                      src={`${window.__dynamic_base__}/images/${player.icon}.webp`}
+                    />
+                    <Text>{player.name}</Text>
+                  </HStack>
+                </Item>
+              )
+            }
           </For>
         </Submenu>
       </Show>

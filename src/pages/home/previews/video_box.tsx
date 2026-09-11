@@ -8,12 +8,22 @@ import {
   Switch,
   Icon,
   IconButton,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
 } from "@hope-ui/solid"
 import { For, JSXElement, createSignal, createMemo, Show } from "solid-js"
 import { useRouter, useLink, useT, usePath, getGlobalPage } from "~/hooks"
 import { getPagination, objStore, setShouldKeepState } from "~/store"
-import { ObjType } from "~/types"
-import { convertURL, getPlatform, pathDir } from "~/utils"
+import { Obj, ObjType } from "~/types"
+import {
+  buildPotPlayerURL,
+  convertURL,
+  getPlatform,
+  isSubtitleFile,
+  pathDir,
+} from "~/utils"
 import Artplayer from "artplayer"
 import { SelectWrapper } from "~/components"
 import { BsArrowRight } from "solid-icons/bs"
@@ -135,6 +145,59 @@ export const AutoHeightPlugin = (player: Artplayer) => {
   })
 }
 
+const PotPlayerMenu = () => {
+  const t = useT()
+  const { currentObjLink, rawLink } = useLink()
+  const subtitles = createMemo(() =>
+    objStore.related.filter((obj) => isSubtitleFile(obj.name)),
+  )
+  const launch = (subtitle?: Obj) => {
+    window.open(
+      buildPotPlayerURL(
+        currentObjLink(true),
+        subtitle ? rawLink(subtitle, true) : undefined,
+      ),
+      "_self",
+    )
+  }
+
+  return (
+    <Menu>
+      <MenuTrigger cursor="pointer" aria-label="PotPlayer">
+        <Tooltip placement="top" withArrow label="PotPlayer">
+          <Image
+            m="0 auto"
+            boxSize="$8"
+            src={`${window.__dynamic_base__}/images/potplayer.webp`}
+          />
+        </Tooltip>
+      </MenuTrigger>
+      <MenuContent>
+        <MenuItem onSelect={() => launch()}>
+          {t("home.preview.no_subtitles")}
+        </MenuItem>
+        <For each={subtitles()}>
+          {(subtitle) => (
+            <MenuItem onSelect={() => launch(subtitle)}>
+              <span
+                title={subtitle.name}
+                style={{
+                  "max-width": "240px",
+                  overflow: "hidden",
+                  "text-overflow": "ellipsis",
+                  "white-space": "nowrap",
+                }}
+              >
+                {subtitle.name}
+              </span>
+            </MenuItem>
+          )}
+        </For>
+      </MenuContent>
+    </Menu>
+  )
+}
+
 export const VideoBox = (props: {
   children: JSXElement
   onAutoNextChange: (v: boolean) => void
@@ -228,6 +291,9 @@ export const VideoBox = (props: {
       <Flex wrap="wrap" gap="$1" justifyContent="center" alignItems="center">
         <For each={platformPlayers()}>
           {(item) => {
+            if (item.name === "PotPlayer") {
+              return <PotPlayerMenu />
+            }
             return (
               <Tooltip placement="top" withArrow label={item.name}>
                 <Anchor
