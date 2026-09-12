@@ -10,6 +10,7 @@
 - `src/pages/home/previews/danmaku*.ts`：弹幕控制、配置、解析、渲染与测试；普通视频和阿里云视频均需保留初始化及清理调用。
 - `src/pages/home/previews/playback.css`：Emby、字幕与弹幕的定制样式。两个视频入口都在 `artplayer.css` 之后导入，保持覆盖顺序。`artplayer.css` 保留上游原样。
 - `src/pages/home/previews/subtitle.ts`、`src/utils/subtitle.ts`：字幕语言排序、文件识别及 PotPlayer 链接。
+- `src/pages/home/previews/subtitle-style.ts`：SRT/VTT 字号、描边、底部间距和本地保存；两个视频入口均注册 `SubtitleStylePlugin`，不修改 ASS 画布样式。
 
 仍需手动关注的上游页面差异：
 

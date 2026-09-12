@@ -30,6 +30,7 @@ import { ArtPlayerIconsSubtitle } from "~/components/icons"
 import { useNavigate } from "@solidjs/router"
 import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
+import { SubtitleStylePlugin } from "./subtitle-style"
 import { createEmbyPlayback } from "./emby-playback"
 import "./artplayer.css"
 import "./playback.css"
@@ -114,7 +115,7 @@ const Preview = () => {
     ],
     quality: [],
     // highlight: [],
-    plugins: [AutoHeightPlugin],
+    plugins: [AutoHeightPlugin, SubtitleStylePlugin],
     whitelist: [],
     settings: [],
     // subtitle:{}

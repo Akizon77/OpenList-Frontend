@@ -23,6 +23,7 @@ import { useNavigate } from "@solidjs/router"
 import { TiWarning } from "solid-icons/ti"
 import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
+import { SubtitleStylePlugin } from "./subtitle-style"
 import "./artplayer.css"
 import "./playback.css"
 
@@ -126,7 +127,7 @@ const Preview = () => {
     playsInline: true,
     theme: getMainColor(),
     quality: [],
-    plugins: [AutoHeightPlugin],
+    plugins: [AutoHeightPlugin, SubtitleStylePlugin],
     whitelist: [],
     screenshot: true,
     settings: [],
