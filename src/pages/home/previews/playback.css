@@ -1,0 +1,589 @@
+.art-video-player .art-control-emby-quality {
+  min-width: 64px;
+  padding: 0 8px;
+  justify-content: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.art-video-player
+  .art-control-emby-quality.art-control-selector
+  .art-selector-list {
+  min-width: 150px;
+  max-height: min(58vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.art-video-player .art-control-emby-quality .art-selector-item.art-current {
+  color: var(--art-theme);
+}
+
+@media (max-width: 440px) {
+  .art-video-player .art-control-emby-quality {
+    min-width: 52px;
+    padding: 0 5px;
+    font-size: 11px;
+  }
+}
+
+.art-video-player
+  .art-settings
+  .art-setting-item[data-value="openlist-subtitle-track"] {
+  width: calc(100% - 10px);
+  height: 42px !important;
+  margin: 2px 5px;
+  border-radius: 6px;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.art-video-player
+  .art-settings
+  .art-setting-item[data-value="openlist-subtitle-track"]:hover {
+  background: rgb(255 255 255 / 10%);
+}
+
+.art-video-player
+  .art-settings
+  .art-setting-item[data-value="openlist-subtitle-track"].art-current {
+  background: color-mix(in srgb, var(--art-theme) 24%, transparent);
+  color: #fff;
+}
+
+.art-video-player
+  .art-setting-item[data-value="openlist-subtitle-track"]
+  .art-setting-item-left,
+.art-video-player
+  .art-setting-item[data-value="openlist-subtitle-track"]
+  .art-setting-item-left-text {
+  min-width: 0;
+}
+
+.openlist-subtitle-option {
+  display: block;
+  min-width: 0;
+  max-width: 160px;
+}
+
+.openlist-subtitle-option__name {
+  display: block;
+  overflow: hidden;
+  color: rgb(255 255 255 / 88%);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.art-video-player
+  .art-setting-item[data-value="openlist-subtitle-track"]
+  .art-setting-item-right-tooltip {
+  min-width: 32px;
+  padding: 3px 6px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(255 255 255 / 68%);
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  text-shadow: none;
+}
+
+.art-video-player
+  .art-setting-item[data-value="openlist-subtitle-track"].art-current
+  .art-setting-item-right-tooltip {
+  border-color: color-mix(in srgb, var(--art-theme) 55%, white 15%);
+  background: color-mix(in srgb, var(--art-theme) 36%, transparent);
+  color: #fff;
+}
+
+.openlist-danmaku-panel {
+  position: absolute;
+  z-index: 160;
+  top: 12px;
+  right: 12px;
+  bottom: 56px;
+  display: flex;
+  width: min(420px, calc(100% - 24px));
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 8px;
+  background: rgb(17 20 24 / 96%);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 42%);
+  color: #f5f7fa;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(100% + 24px));
+  transition:
+    opacity 160ms ease,
+    transform 200ms ease;
+}
+
+.openlist-danmaku-panel.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.openlist-danmaku-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+}
+
+.openlist-danmaku-panel__header strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.openlist-danmaku-panel__header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 8%);
+  color: inherit;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.openlist-danmaku-panel__header button:hover {
+  background: rgb(255 255 255 / 14%);
+}
+
+.openlist-danmaku-source {
+  min-height: 17px;
+  margin-top: 3px;
+  color: rgb(255 255 255 / 56%);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.openlist-danmaku-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+
+.openlist-danmaku-actions button,
+.openlist-danmaku-episodes button {
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 6%);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.openlist-danmaku-actions button {
+  min-height: 32px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.openlist-danmaku-actions button:hover,
+.openlist-danmaku-episodes button:hover {
+  border-color: var(--art-theme, #1890ff);
+  background: rgb(255 255 255 / 11%);
+}
+
+.openlist-danmaku-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 6px;
+  padding: 10px 14px;
+}
+
+.openlist-danmaku-search input {
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 6px;
+  outline: none;
+  background: rgb(0 0 0 / 24%);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.openlist-danmaku-search input:focus {
+  border-color: var(--art-theme, #1890ff);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--art-theme, #1890ff) 24%, transparent);
+}
+
+.openlist-danmaku-search button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: var(--art-theme, #1890ff);
+  color: #fff;
+  cursor: pointer;
+}
+
+.openlist-danmaku-search button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.openlist-danmaku-status,
+.openlist-danmaku-match {
+  margin: 0 14px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.openlist-danmaku-status {
+  padding: 8px 10px;
+  background: rgb(255 255 255 / 6%);
+  color: rgb(255 255 255 / 72%);
+}
+
+.openlist-danmaku-match {
+  display: none;
+  padding: 8px 10px;
+  border-left: 3px solid var(--art-theme, #1890ff);
+  background: rgb(24 144 255 / 14%);
+  color: #fff;
+}
+
+.openlist-danmaku-match.is-visible {
+  display: block;
+}
+
+.openlist-danmaku-candidates {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px 14px;
+  overscroll-behavior: contain;
+}
+
+.openlist-danmaku-candidate {
+  overflow: hidden;
+  margin-top: 8px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 5%);
+}
+
+.openlist-danmaku-candidate__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.openlist-danmaku-candidate__heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.openlist-danmaku-candidate__heading span {
+  flex: 0 0 auto;
+  color: rgb(255 255 255 / 52%);
+  font-size: 11px;
+}
+
+.openlist-danmaku-episodes {
+  display: grid;
+  max-height: 240px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.openlist-danmaku-episodes button {
+  min-height: 34px;
+  padding: 7px 9px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.openlist-danmaku-episodes button.is-current {
+  border-color: var(--art-theme, #1890ff);
+  background: rgb(24 144 255 / 16%);
+}
+
+.openlist-danmaku-empty {
+  padding: 24px 10px;
+  color: rgb(255 255 255 / 54%);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .openlist-danmaku-panel {
+    top: 8px;
+    right: 8px;
+    bottom: 48px;
+    width: calc(100% - 16px);
+  }
+
+  .openlist-danmaku-panel__header {
+    padding: 12px 12px 8px;
+  }
+
+  .openlist-danmaku-actions,
+  .openlist-danmaku-search {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .openlist-danmaku-status,
+  .openlist-danmaku-match {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
+  .openlist-danmaku-candidates {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}
+
+.openlist-danmaku-layer {
+  position: absolute;
+  z-index: 19;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.art-video-player .art-control-danmaku-toggle.is-active {
+  color: var(--art-theme);
+}
+
+.openlist-danmaku-heatmap {
+  position: absolute;
+  z-index: 35;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--art-theme);
+  pointer-events: none;
+}
+
+.openlist-danmaku-heatmap path {
+  fill: var(--art-theme, #1890ff);
+  fill: color-mix(in srgb, var(--art-theme, #1890ff) 56%, transparent);
+  opacity: 0.82;
+  stroke: var(--art-theme, #1890ff);
+  stroke: color-mix(in srgb, var(--art-theme, #1890ff) 88%, white 8%);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.openlist-danmaku-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px 14px 0;
+}
+
+.openlist-danmaku-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: rgb(255 255 255 / 58%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.openlist-danmaku-tabs button:hover {
+  color: #fff;
+}
+
+.openlist-danmaku-tabs button[data-active="true"] {
+  border-bottom-color: var(--art-theme, #1890ff);
+  color: #fff;
+}
+
+.openlist-danmaku-tab-panel {
+  min-height: 0;
+  flex: 1;
+}
+
+.openlist-danmaku-tab-panel[data-active="true"] {
+  display: flex !important;
+  flex-direction: column;
+}
+
+.openlist-danmaku-tab-panel[data-active="false"] {
+  display: none !important;
+}
+
+.openlist-danmaku-settings {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 6px 14px 14px;
+  overscroll-behavior: contain;
+}
+
+.openlist-danmaku-settings-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.openlist-danmaku-settings-group:last-child {
+  border-bottom: 0;
+}
+
+.openlist-danmaku-settings-title {
+  color: rgb(255 255 255 / 58%);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.openlist-danmaku-checks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.openlist-danmaku-checks--stacked {
+  grid-template-columns: 1fr;
+}
+
+.openlist-danmaku-checks label {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.openlist-danmaku-checks label:hover {
+  border-color: rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 7%);
+}
+
+.openlist-danmaku-checks input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--art-theme, #1890ff);
+}
+
+.openlist-danmaku-checks span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.openlist-danmaku-range {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.openlist-danmaku-range input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--art-theme, #1890ff);
+}
+
+.openlist-danmaku-range output {
+  color: rgb(255 255 255 / 66%);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.openlist-danmaku-setting-row {
+  display: grid;
+  gap: 7px;
+}
+
+.openlist-danmaku-setting-row > span {
+  font-size: 12px;
+}
+
+.openlist-danmaku-segmented {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.openlist-danmaku-segmented button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 4%);
+  color: rgb(255 255 255 / 64%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.openlist-danmaku-segmented button:hover {
+  border-color: rgb(255 255 255 / 22%);
+  color: #fff;
+}
+
+.openlist-danmaku-segmented button.is-active {
+  border-color: color-mix(in srgb, var(--art-theme, #1890ff) 58%, transparent);
+  background: color-mix(in srgb, var(--art-theme, #1890ff) 22%, transparent);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .openlist-danmaku-tabs,
+  .openlist-danmaku-settings {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .openlist-danmaku-checks {
+    grid-template-columns: 1fr;
+  }
+}

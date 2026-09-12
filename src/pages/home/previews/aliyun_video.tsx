@@ -24,6 +24,7 @@ import { TiWarning } from "solid-icons/ti"
 import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
 import "./artplayer.css"
+import "./playback.css"
 
 export interface Data {
   drive_id: string

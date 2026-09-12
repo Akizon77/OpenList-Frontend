@@ -20,6 +20,15 @@ import {
 import { DanmuJsRenderer } from "./danmaku-renderer"
 import { DanmakuController } from "./danmaku"
 
+// These unit tests exercise the controller without bootstrapping the app.
+vi.mock("~/app/i18n", () => ({ currentLang: () => "zh-CN" }))
+vi.mock("~/store", () => ({ getSettingBool: () => true }))
+vi.mock("~/utils", () => ({
+  danmakuSearch: vi.fn(),
+  danmakuComments: vi.fn(),
+  ext: (name: string) => name.split(".").pop() ?? "",
+}))
+
 describe("danmaku data pipeline", () => {
   beforeEach(() => {
     localStorage.clear()
