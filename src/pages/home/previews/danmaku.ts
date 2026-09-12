@@ -16,13 +16,8 @@ import {
   loadDanmakuConfig,
   saveDanmakuConfig,
   type DanmakuConfig,
-  type DanmakuDisplayArea,
   type DanmakuEngineMode,
   type DanmakuFontFamily,
-  type DanmakuFontWeight,
-  type DanmakuOutline,
-  type DanmakuSpacing,
-  type DanmakuSpeed,
 } from "./danmaku-config"
 import { normalizeComments, parseBilibiliXml } from "./danmaku-data"
 import { DanmuJsRenderer } from "./danmaku-renderer"
@@ -498,21 +493,24 @@ export class DanmakuController {
                 <button type="button" data-value="monospace">${this.text("等宽", "Mono")}</button>
               </div>
             </div>
-            <div class="openlist-danmaku-setting-row">
-              <span>${this.text("粗细", "Weight")}</span>
-              <div class="openlist-danmaku-segmented" data-danmaku-segment="fontWeight">
-                <button type="button" data-value="normal">${this.text("常规", "Normal")}</button>
-                <button type="button" data-value="bold">${this.text("粗体", "Bold")}</button>
-              </div>
-            </div>
             <label class="openlist-danmaku-range">
               <span>${this.text("字号", "Font size")}</span>
               <input type="range" min="16" max="36" step="1" data-danmaku-setting="fontSize" />
               <output data-danmaku-output="fontSize"></output>
             </label>
             <label class="openlist-danmaku-range">
+              <span>${this.text("字重", "Weight")}</span>
+              <input type="range" min="100" max="900" step="100" data-danmaku-setting="fontWeight" />
+              <output data-danmaku-output="fontWeight"></output>
+            </label>
+            <label class="openlist-danmaku-range">
+              <span>${this.text("行间距", "Line spacing")}</span>
+              <input type="range" min="0" max="24" step="1" data-danmaku-setting="lineSpacing" />
+              <output data-danmaku-output="lineSpacing"></output>
+            </label>
+            <label class="openlist-danmaku-range">
               <span>${this.text("描边", "Outline")}</span>
-              <input type="range" min="0" max="5" step="1" data-danmaku-setting="outline" />
+              <input type="range" min="0" max="3" step="0.1" data-danmaku-setting="outline" />
               <output data-danmaku-output="outline"></output>
             </label>
             <label class="openlist-danmaku-range">
@@ -522,33 +520,21 @@ export class DanmakuController {
             </label>
           </section>
           <section class="openlist-danmaku-settings-group">
-            <div class="openlist-danmaku-setting-row">
+            <label class="openlist-danmaku-range">
               <span>${this.text("显示区域", "Display area")}</span>
-              <div class="openlist-danmaku-segmented" data-danmaku-segment="displayArea">
-                <button type="button" data-value="25">25%</button>
-                <button type="button" data-value="50">50%</button>
-                <button type="button" data-value="75">75%</button>
-                <button type="button" data-value="90">90%</button>
-                <button type="button" data-value="100">100%</button>
-              </div>
-            </div>
-            <div class="openlist-danmaku-setting-row">
+              <input type="range" min="25" max="100" step="5" data-danmaku-setting="displayArea" />
+              <output data-danmaku-output="displayArea"></output>
+            </label>
+            <label class="openlist-danmaku-range">
               <span>${this.text("速度", "Speed")}</span>
-              <div class="openlist-danmaku-segmented" data-danmaku-segment="speed">
-                <button type="button" data-value="0.75">0.75x</button>
-                <button type="button" data-value="1">1x</button>
-                <button type="button" data-value="1.25">1.25x</button>
-                <button type="button" data-value="1.5">1.5x</button>
-              </div>
-            </div>
-            <div class="openlist-danmaku-setting-row">
-              <span>${this.text("间距", "Spacing")}</span>
-              <div class="openlist-danmaku-segmented" data-danmaku-segment="spacing">
-                <button type="button" data-value="0">${this.text("紧凑", "Compact")}</button>
-                <button type="button" data-value="100">${this.text("标准", "Normal")}</button>
-                <button type="button" data-value="250">${this.text("宽松", "Wide")}</button>
-              </div>
-            </div>
+              <input type="range" min="0.5" max="2" step="0.05" data-danmaku-setting="speed" />
+              <output data-danmaku-output="speed"></output>
+            </label>
+            <label class="openlist-danmaku-range">
+              <span>${this.text("弹幕间距", "Danmaku spacing")}</span>
+              <input type="range" min="0" max="300" step="10" data-danmaku-setting="spacing" />
+              <output data-danmaku-output="spacing"></output>
+            </label>
           </section>
           <section class="openlist-danmaku-settings-group">
             <div class="openlist-danmaku-checks openlist-danmaku-checks--stacked">
@@ -645,14 +631,24 @@ export class DanmakuController {
       next.modes[mode] = input.checked
     } else if (setting === "fontSize") {
       next.fontSize = clamp(Number(input.value), 16, 36)
+    } else if (setting === "fontWeight") {
+      next.fontWeight = clamp(
+        Math.round(Number(input.value) / 100) * 100,
+        100,
+        900,
+      )
+    } else if (setting === "lineSpacing") {
+      next.lineSpacing = clamp(Math.round(Number(input.value)), 0, 24)
     } else if (setting === "outline") {
-      next.outline = clamp(
-        Math.round(Number(input.value)),
-        0,
-        5,
-      ) as DanmakuOutline
+      next.outline = round(clamp(Number(input.value), 0, 3), 1)
     } else if (setting === "opacity") {
       next.opacity = clamp(Number(input.value) / 100, 0.1, 1)
+    } else if (setting === "displayArea") {
+      next.displayArea = clamp(Math.round(Number(input.value)), 25, 100)
+    } else if (setting === "speed") {
+      next.speed = round(clamp(Number(input.value), 0.5, 2), 2)
+    } else if (setting === "spacing") {
+      next.spacing = clamp(Math.round(Number(input.value)), 0, 300)
     } else if (setting === "antiOverlap") {
       next.antiOverlap = input.checked
     } else if (setting === "followPlaybackRate") {
@@ -676,16 +672,8 @@ export class DanmakuController {
       modes: { ...this.config.modes },
     }
 
-    if (setting === "displayArea") {
-      next.displayArea = Number(value) as DanmakuDisplayArea
-    } else if (setting === "speed") {
-      next.speed = Number(value) as DanmakuSpeed
-    } else if (setting === "spacing") {
-      next.spacing = Number(value) as DanmakuSpacing
-    } else if (setting === "fontFamily") {
+    if (setting === "fontFamily") {
       next.fontFamily = value as DanmakuFontFamily
-    } else if (setting === "fontWeight") {
-      next.fontWeight = value as DanmakuFontWeight
     } else {
       return
     }
@@ -715,6 +703,14 @@ export class DanmakuController {
       "[data-danmaku-setting='fontSize']",
     )
     if (fontSize) fontSize.value = String(this.config.fontSize)
+    const fontWeight = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='fontWeight']",
+    )
+    if (fontWeight) fontWeight.value = String(this.config.fontWeight)
+    const lineSpacing = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='lineSpacing']",
+    )
+    if (lineSpacing) lineSpacing.value = String(this.config.lineSpacing)
     const opacity = panel.querySelector<HTMLInputElement>(
       "[data-danmaku-setting='opacity']",
     )
@@ -723,11 +719,35 @@ export class DanmakuController {
       "[data-danmaku-setting='outline']",
     )
     if (outline) outline.value = String(this.config.outline)
+    const displayArea = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='displayArea']",
+    )
+    if (displayArea) displayArea.value = String(this.config.displayArea)
+    const speed = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='speed']",
+    )
+    if (speed) speed.value = String(this.config.speed)
+    const spacing = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='spacing']",
+    )
+    if (spacing) spacing.value = String(this.config.spacing)
 
     const fontSizeOutput = panel.querySelector<HTMLOutputElement>(
       "[data-danmaku-output='fontSize']",
     )
     if (fontSizeOutput) fontSizeOutput.value = `${this.config.fontSize}px`
+    const fontWeightOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='fontWeight']",
+    )
+    if (fontWeightOutput) {
+      fontWeightOutput.value = String(this.config.fontWeight)
+    }
+    const lineSpacingOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='lineSpacing']",
+    )
+    if (lineSpacingOutput) {
+      lineSpacingOutput.value = `${this.config.lineSpacing}px`
+    }
     const opacityOutput = panel.querySelector<HTMLOutputElement>(
       "[data-danmaku-output='opacity']",
     )
@@ -738,14 +758,28 @@ export class DanmakuController {
       "[data-danmaku-output='outline']",
     )
     if (outlineOutput) {
-      outlineOutput.value = this.outlineLabel(this.config.outline)
+      outlineOutput.value = `${formatNumber(this.config.outline)}px`
+    }
+    const displayAreaOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='displayArea']",
+    )
+    if (displayAreaOutput) {
+      displayAreaOutput.value = `${this.config.displayArea}%`
+    }
+    const speedOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='speed']",
+    )
+    if (speedOutput) {
+      speedOutput.value = `${formatNumber(this.config.speed)}x`
+    }
+    const spacingOutput = panel.querySelector<HTMLOutputElement>(
+      "[data-danmaku-output='spacing']",
+    )
+    if (spacingOutput) {
+      spacingOutput.value = `${this.config.spacing}px`
     }
 
-    this.syncSegmentState("displayArea", String(this.config.displayArea))
-    this.syncSegmentState("speed", String(this.config.speed))
-    this.syncSegmentState("spacing", String(this.config.spacing))
     this.syncSegmentState("fontFamily", this.config.fontFamily)
-    this.syncSegmentState("fontWeight", this.config.fontWeight)
 
     for (const setting of [
       "antiOverlap",
@@ -775,17 +809,6 @@ export class DanmakuController {
       "aria-pressed",
       String(this.config.visible),
     )
-  }
-
-  private outlineLabel(value: DanmakuOutline) {
-    return [
-      this.text("无", "None"),
-      this.text("极细", "Hairline"),
-      this.text("细", "Thin"),
-      this.text("标准", "Normal"),
-      this.text("粗", "Bold"),
-      this.text("极粗", "Heavy"),
-    ][value]
   }
 
   private async restoreLocal() {
@@ -1054,4 +1077,15 @@ function errorMessage(error: unknown) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function round(value: number, digits: number) {
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")
 }

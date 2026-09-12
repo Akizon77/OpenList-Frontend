@@ -1,10 +1,6 @@
 import type { DanmuJsComment, DanmuJsMode } from "danmu.js"
 import type { DanmakuComment, DanmakuMode } from "~/types"
-import type {
-  DanmakuFontFamily,
-  DanmakuFontWeight,
-  DanmakuOutline,
-} from "./danmaku-config"
+import type { DanmakuFontFamily } from "./danmaku-config"
 
 export const DANMAKU_HEATMAP_BUCKETS = 256
 
@@ -44,30 +40,21 @@ const FONT_FAMILY_STACKS: Record<
   monospace: 'SFMono-Regular, Consolas, "Noto Sans Mono CJK SC", monospace',
 }
 
-const OUTLINE_STROKE_WIDTHS: Record<DanmakuOutline, number> = {
-  0: 0,
-  1: 0.25,
-  2: 0.5,
-  3: 0.8,
-  4: 1.2,
-  5: 1.8,
-}
-
-const OUTLINE_SHADOWS: Record<DanmakuOutline, string> = {
-  0: "",
-  1: "0 1px 1px rgba(0, 0, 0, 0.86)",
-  2: "0 1px 2px rgba(0, 0, 0, 0.92), 0 0 1px rgba(0, 0, 0, 0.86)",
-  3: "0 1px 2px rgba(0, 0, 0, 0.96), 0 0 2px rgba(0, 0, 0, 0.9)",
-  4: "0 0 1px #000, 0 1px 2px rgba(0, 0, 0, 0.96), 1px 0 2px rgba(0, 0, 0, 0.9), -1px 0 2px rgba(0, 0, 0, 0.9), 0 -1px 2px rgba(0, 0, 0, 0.9)",
-  5: "0 0 1px #000, 0 0 2px #000, 0 1px 2px rgba(0, 0, 0, 0.98), 1px 0 2px rgba(0, 0, 0, 0.96), -1px 0 2px rgba(0, 0, 0, 0.96), 0 -1px 2px rgba(0, 0, 0, 0.96), 1px 1px 2px rgba(0, 0, 0, 0.94), -1px -1px 2px rgba(0, 0, 0, 0.94), 1px -1px 2px rgba(0, 0, 0, 0.94), -1px 1px 2px rgba(0, 0, 0, 0.94)",
-}
+const OUTLINE_SHADOWS = [
+  "0 1px 1px rgba(0, 0, 0, 0.86)",
+  "0 1px 2px rgba(0, 0, 0, 0.92), 0 0 1px rgba(0, 0, 0, 0.86)",
+  "0 1px 2px rgba(0, 0, 0, 0.96), 0 0 2px rgba(0, 0, 0, 0.9)",
+  "0 0 1px #000, 0 1px 2px rgba(0, 0, 0, 0.96), 1px 0 2px rgba(0, 0, 0, 0.9), -1px 0 2px rgba(0, 0, 0, 0.9), 0 -1px 2px rgba(0, 0, 0, 0.9)",
+  "0 0 1px #000, 0 0 2px #000, 0 1px 2px rgba(0, 0, 0, 0.98), 1px 0 2px rgba(0, 0, 0, 0.96), -1px 0 2px rgba(0, 0, 0, 0.96), 0 -1px 2px rgba(0, 0, 0, 0.96), 1px 1px 2px rgba(0, 0, 0, 0.94), -1px -1px 2px rgba(0, 0, 0, 0.94), 1px -1px 2px rgba(0, 0, 0, 0.94), -1px 1px 2px rgba(0, 0, 0, 0.94)",
+] as const
 
 export interface DanmakuTextStyleOptions {
   fontSize: number
   fontFamily: DanmakuFontFamily
-  fontWeight: DanmakuFontWeight
-  outline: DanmakuOutline
+  fontWeight: number
+  outline: number
   spacing: number
+  lineSpacing: number
 }
 
 export interface ConvertCommentsOptions {
@@ -177,7 +164,8 @@ export function toDanmuJsComment(
   } else {
     style.fontFamily = FONT_FAMILY_STACKS[options.fontFamily]
   }
-  style.fontWeight = options.fontWeight === "bold" ? "700" : "400"
+  style.fontWeight = String(options.fontWeight)
+  style.lineHeight = `${options.fontSize + options.lineSpacing}px`
 
   if (comment.mode === 0 && options.spacing > 0) {
     style.paddingRight = `${options.spacing}px`
@@ -185,10 +173,10 @@ export function toDanmuJsComment(
     delete style.paddingRight
   }
 
-  const strokeWidth = OUTLINE_STROKE_WIDTHS[options.outline]
+  const strokeWidth = options.outline
   if (strokeWidth > 0) {
     style.WebkitTextStroke = `${strokeWidth}px rgba(0, 0, 0, 0.96)`
-    style.textShadow = OUTLINE_SHADOWS[options.outline]
+    style.textShadow = outlineShadow(strokeWidth)
   } else {
     delete style.WebkitTextStroke
     delete style.textShadow
@@ -204,6 +192,14 @@ export function toDanmuJsComment(
     color: !!comment.color,
     style,
   }
+}
+
+function outlineShadow(width: number) {
+  if (width <= 0.3) return OUTLINE_SHADOWS[0]
+  if (width <= 0.6) return OUTLINE_SHADOWS[1]
+  if (width <= 0.9) return OUTLINE_SHADOWS[2]
+  if (width <= 1.4) return OUTLINE_SHADOWS[3]
+  return OUTLINE_SHADOWS[4]
 }
 
 export function normalizeDanmakuColor(value: unknown): string | undefined {

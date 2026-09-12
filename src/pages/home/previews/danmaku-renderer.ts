@@ -211,6 +211,7 @@ export class DanmuJsRenderer {
     const requiresRebuild =
       previous.displayArea !== this.config.displayArea ||
       previous.spacing !== this.config.spacing ||
+      previous.lineSpacing !== this.config.lineSpacing ||
       previous.antiOverlap !== this.config.antiOverlap
     const requiresCommentRebuild =
       previous.fontFamily !== this.config.fontFamily ||
@@ -439,6 +440,7 @@ export class DanmuJsRenderer {
           fontWeight: this.config.fontWeight,
           outline: this.config.outline,
           spacing: this.config.spacing,
+          lineSpacing: this.config.lineSpacing,
         },
       )
     })
@@ -479,7 +481,7 @@ export class DanmuJsRenderer {
   }
 
   private channelSize() {
-    return this.config.fontSize + 3
+    return this.config.fontSize + this.config.lineSpacing
   }
 
   private normalScrollDuration() {

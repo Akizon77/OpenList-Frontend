@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { DanmakuComment } from "~/types"
 import {
   DANMAKU_CONFIG_KEY,
-  LEGACY_DANMAKU_CONFIG_KEY,
   createDefaultDanmakuConfig,
   loadDanmakuConfig,
   type DanmakuConfig,
@@ -19,6 +18,7 @@ import {
   toDanmuJsComment,
 } from "./danmaku-data"
 import { DanmuJsRenderer } from "./danmaku-renderer"
+import { DanmakuController } from "./danmaku"
 
 describe("danmaku data pipeline", () => {
   beforeEach(() => {
@@ -85,20 +85,25 @@ describe("danmaku data pipeline", () => {
     expect(comments[1].id).not.toBe(comments[2].id)
   })
 
-  it("migrates the legacy configuration once and uses the new key", () => {
+  it("loads supported numeric configuration values", () => {
     localStorage.setItem(
-      LEGACY_DANMAKU_CONFIG_KEY,
+      DANMAKU_CONFIG_KEY,
       JSON.stringify({
         visible: false,
         fontSize: 31,
-        opacity: 0.42,
-        mode: 0,
-        modes: [1],
+        fontFamily: "serif",
+        fontWeight: 700,
+        outline: 1.2,
+        opacity: 0.4,
+        modes: { scroll: true, top: true, bottom: false },
         antiOverlap: true,
-        synchronousPlayback: true,
+        followPlaybackRate: true,
         heatmap: false,
-        speed: 9,
-        margin: ["12%", "18%"],
+        traditionalToSimplified: false,
+        displayArea: 75,
+        speed: 1.25,
+        spacing: 200,
+        lineSpacing: 8,
       }),
     )
 
@@ -107,7 +112,10 @@ describe("danmaku data pipeline", () => {
     expect(config).toMatchObject({
       visible: false,
       fontSize: 31,
-      opacity: 0.42,
+      fontFamily: "serif",
+      fontWeight: 700,
+      outline: 1.2,
+      opacity: 0.4,
       modes: {
         scroll: true,
         top: true,
@@ -116,24 +124,90 @@ describe("danmaku data pipeline", () => {
       antiOverlap: true,
       followPlaybackRate: true,
       heatmap: false,
+      traditionalToSimplified: false,
+      displayArea: 75,
+      speed: 1.25,
+      spacing: 200,
+      lineSpacing: 8,
+    })
+  })
+
+  it("uses defaults for unsupported numeric configuration values", () => {
+    localStorage.setItem(
+      DANMAKU_CONFIG_KEY,
+      JSON.stringify({
+        fontSize: 31.5,
+        fontWeight: 650,
+        outline: 3.1,
+        opacity: 0.42,
+        displayArea: 91,
+        speed: 2.5,
+        spacing: 125,
+        lineSpacing: -1,
+      }),
+    )
+
+    const config = loadDanmakuConfig()
+    expect(config).toMatchObject({
+      fontSize: 25,
+      fontWeight: 400,
+      outline: 0.5,
+      opacity: 1,
+      displayArea: 50,
       speed: 1,
       spacing: 100,
-      displayArea: 50,
-      traditionalToSimplified: true,
-      fontFamily: "system",
-      fontWeight: "normal",
-      outline: 2,
+      lineSpacing: 3,
     })
-    expect(localStorage.getItem(LEGACY_DANMAKU_CONFIG_KEY)).toBeNull()
-    expect(localStorage.getItem(DANMAKU_CONFIG_KEY)).not.toBeNull()
+  })
 
+  it("does not migrate earlier configuration keys", () => {
     localStorage.setItem(
-      LEGACY_DANMAKU_CONFIG_KEY,
-      JSON.stringify({ visible: true, fontSize: 36 }),
+      "openlist_danmaku_config_v2",
+      JSON.stringify({ fontSize: 36, fontWeight: "bold", outline: 5 }),
     )
-    const second = loadDanmakuConfig()
-    expect(second.visible).toBe(false)
-    expect(second.fontSize).toBe(31)
+
+    expect(loadDanmakuConfig()).toEqual(createDefaultDanmakuConfig())
+  })
+
+  it("renders quantitative settings as numeric ranges", () => {
+    const playerElement = document.createElement("div")
+    const controller = new DanmakuController({
+      player: () => undefined,
+      getPath: () => "/video.mkv",
+      getPassword: () => "",
+    })
+    const internal = controller as unknown as {
+      player: Artplayer
+      createPanel: () => void
+    }
+    internal.player = {
+      template: { $player: playerElement },
+    } as unknown as Artplayer
+    internal.createPanel()
+
+    const settings = Array.from(
+      playerElement.querySelectorAll<HTMLInputElement>(
+        ".openlist-danmaku-range input[type='range']",
+      ),
+      (input) => input.dataset.danmakuSetting,
+    )
+    expect(settings).toEqual([
+      "fontSize",
+      "fontWeight",
+      "lineSpacing",
+      "outline",
+      "opacity",
+      "displayArea",
+      "speed",
+      "spacing",
+    ])
+    expect(
+      playerElement.querySelector<HTMLOutputElement>(
+        "[data-danmaku-output='lineSpacing']",
+      )?.value,
+    ).toBe("3px")
+    expect(playerElement.textContent).not.toContain("标准")
+    expect(playerElement.textContent).not.toContain("粗体")
   })
 
   it("maps business modes to danmu.js modes", () => {
@@ -142,7 +216,8 @@ describe("danmaku data pipeline", () => {
     expect(danmakuModeToEngineMode(2)).toBe("bottom")
     const config = createDefaultDanmakuConfig()
     expect(config.spacing).toBe(100)
-    expect(config.outline).toBe(2)
+    expect(config.lineSpacing).toBe(3)
+    expect(config.outline).toBe(0.5)
 
     const comment = toDanmuJsComment(
       {
@@ -156,9 +231,10 @@ describe("danmaku data pipeline", () => {
       {
         fontSize: 30,
         fontFamily: "serif",
-        fontWeight: "bold",
-        outline: 5,
+        fontWeight: 700,
+        outline: 1.8,
         spacing: 100,
+        lineSpacing: 4,
       },
     )
     expect(comment.style).toMatchObject({
@@ -166,6 +242,7 @@ describe("danmaku data pipeline", () => {
       fontSize: "30px",
       fontFamily: '"Songti SC", STSong, SimSun, "Noto Serif CJK SC", serif',
       fontWeight: "700",
+      lineHeight: "34px",
       WebkitTextStroke: "1.8px rgba(0, 0, 0, 0.96)",
       paddingRight: "100px",
     })
