@@ -447,10 +447,15 @@ export class DanmakuController {
     }
 
     const more = player.setting.find(MORE_SETTING)
-    const selector = (more?.selector ?? []).filter(
-      (item: Setting) =>
-        item.name !== SOURCE_SETTING && item.name !== DISPLAY_SETTING,
-    )
+    // ArtPlayer caches each child's parent option array. Rebuilding the
+    // existing more items prevents stale $option references and keeps the
+    // submenu's native back header working after settings.update().
+    const selector = (more?.selector ?? [])
+      .map(cloneSetting)
+      .filter(
+        (item: Setting) =>
+          item.name !== SOURCE_SETTING && item.name !== DISPLAY_SETTING,
+      )
     selector.push(this.sourceSetting, displaySetting)
 
     if (more) {
@@ -1164,4 +1169,11 @@ function formatNumber(value: number) {
   return Number.isInteger(value)
     ? String(value)
     : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")
+}
+
+function cloneSetting(item: Setting): Setting {
+  return {
+    ...item,
+    selector: item.selector?.map(cloneSetting),
+  }
 }

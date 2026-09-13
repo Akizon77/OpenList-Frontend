@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import * as OpenCC from "opencc-js/t2cn"
+// @ts-expect-error jsdom does not ship type declarations in this project.
+import { JSDOM } from "jsdom"
 import type Artplayer from "artplayer"
 import type { Setting } from "artplayer"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -528,6 +530,114 @@ describe("danmaku player settings", () => {
     expect(controls["danmaku-toggle"]).toBeUndefined()
     expect(find("openlist-danmaku-source")).toBeUndefined()
     expect(find("openlist-danmaku-display")).toBeUndefined()
+  })
+})
+
+describe("danmaku ArtPlayer submenu navigation", () => {
+  it("keeps the native back item after updating the More menu", async () => {
+    const dom = new JSDOM(
+      '<!doctype html><html><body><div id="player"></div></body></html>',
+      { url: "http://localhost", pretendToBeVisual: true },
+    )
+    const previous = {
+      window: globalThis.window,
+      document: globalThis.document,
+      navigator: globalThis.navigator,
+      screen: globalThis.screen,
+      location: globalThis.location,
+      HTMLElement: globalThis.HTMLElement,
+      Element: globalThis.Element,
+      Node: globalThis.Node,
+      Event: globalThis.Event,
+      MouseEvent: globalThis.MouseEvent,
+      CustomEvent: globalThis.CustomEvent,
+      getComputedStyle: globalThis.getComputedStyle,
+      requestAnimationFrame: globalThis.requestAnimationFrame,
+      cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    }
+    const bind = (key: keyof typeof previous, value: unknown) => {
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        writable: true,
+        value,
+      })
+    }
+    bind("window", dom.window)
+    bind("document", dom.window.document)
+    bind("navigator", dom.window.navigator)
+    bind("screen", dom.window.screen)
+    bind("location", dom.window.location)
+    bind("HTMLElement", dom.window.HTMLElement)
+    bind("Element", dom.window.Element)
+    bind("Node", dom.window.Node)
+    bind("Event", dom.window.Event)
+    bind("MouseEvent", dom.window.MouseEvent)
+    bind("CustomEvent", dom.window.CustomEvent)
+    bind("getComputedStyle", dom.window.getComputedStyle)
+    bind("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(Date.now()), 0),
+    )
+    bind("cancelAnimationFrame", clearTimeout)
+
+    try {
+      const { default: Artplayer } = await import("artplayer")
+      const player = new Artplayer({
+        container: "#player",
+        url: "",
+        setting: true,
+        autoplay: false,
+        muted: true,
+        controls: [],
+        settings: [
+          {
+            name: "openlist-player-more",
+            html: "更多",
+            selector: [
+              {
+                name: "openlist-player-pip",
+                html: "画中画",
+                onClick: () => "",
+              },
+            ],
+          },
+        ],
+      })
+      const controller = new DanmakuController({
+        player: () => player,
+        getPath: () => "/test.mkv",
+        getPassword: () => "",
+      })
+      const internal = controller as unknown as {
+        player: Artplayer
+        installSettings: () => void
+      }
+      internal.player = player
+      internal.installSettings()
+      player.setting.show = true
+      const more = player.setting.find("openlist-player-more")!
+      ;(
+        player.setting as Artplayer["setting"] & {
+          render: (option?: Setting[]) => void
+        }
+      ).render(more.selector)
+
+      document
+        .querySelector<HTMLElement>('[data-name="openlist-danmaku-source"]')
+        ?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }))
+      await Promise.resolve()
+
+      const current = document.querySelector(".art-setting-panel.art-current")
+      expect(
+        current?.querySelector(":scope > .art-setting-item-back"),
+      ).not.toBeNull()
+      controller.destroy()
+      player.destroy()
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        bind(key as keyof typeof previous, value)
+      }
+      dom.window.close()
+    }
   })
 })
 
