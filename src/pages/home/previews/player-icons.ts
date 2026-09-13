@@ -2,15 +2,11 @@ import {
   TbChevronDown,
   TbMessage2,
   TbMessage2Off,
-  TbMessage2Search,
   TbPlayerPause,
   TbPlayerPlay,
   TbPlayerTrackNext,
-  TbSearch,
-  TbSettings2,
   TbSun,
   TbVolume,
-  TbX,
 } from "solid-icons/tb"
 import { createRoot } from "solid-js"
 
@@ -18,10 +14,6 @@ const icons = {
   chevron: TbChevronDown,
   danmaku: TbMessage2,
   danmakuOff: TbMessage2Off,
-  source: TbMessage2Search,
-  search: TbSearch,
-  settings: TbSettings2,
-  close: TbX,
   play: TbPlayerPlay,
   pause: TbPlayerPause,
   seek: TbPlayerTrackNext,

@@ -499,12 +499,7 @@ export function PlayerInteractionsPlugin(player: Artplayer) {
       $player.focus({ preventScroll: true })
       return
     }
-    if (
-      target.closest(
-        "input, textarea, select, [contenteditable], .openlist-danmaku-panel",
-      )
-    )
-      return
+    if (target.closest("input, textarea, select, [contenteditable]")) return
     const selector = target.closest<HTMLElement>(".art-control-selector")
     if (
       selector &&

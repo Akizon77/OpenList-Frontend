@@ -1,4 +1,5 @@
 import Artplayer from "artplayer"
+import type { Setting, SettingOption } from "artplayer"
 import { currentLang } from "~/app/i18n"
 import { getSettingBool } from "~/store"
 import {
@@ -16,18 +17,34 @@ import {
   loadDanmakuConfig,
   saveDanmakuConfig,
   type DanmakuConfig,
-  type DanmakuEngineMode,
   type DanmakuFontFamily,
 } from "./danmaku-config"
 import { normalizeComments, parseBilibiliXml } from "./danmaku-data"
 import { DanmuJsRenderer } from "./danmaku-renderer"
-import { playerIcon } from "./player-icons"
 
 const MAPPINGS_KEY = "openlist_danmaku_mappings_v1"
-const PANEL_ID = "openlist-danmaku-panel"
+const MORE_SETTING = "openlist-player-more"
+const SOURCE_SETTING = "openlist-danmaku-source"
+const DISPLAY_SETTING = "openlist-danmaku-display"
+const TOGGLE_CONTROL = "danmaku-toggle"
+
+const DANMAKU_SWITCH_ON = `<span class="bui-danmaku-switch-on"><svg xmlns="http://www.w3.org/2000/svg" data-pointer="none" viewBox="0 0 24 24"><path d="M15.386 2.201a.75.75 0 0 1 1.228.86l-.888 1.27a94.01 94.01 0 0 1 2.228.114 3.872 3.872 0 0 1 3.634 3.602c.086 1.227.162 2.778.162 4.453 0 .495-.007.977-.02 1.44a.75.75 0 1 1-1.499-.034c.012-.453.019-.923.019-1.406 0-1.632-.074-3.147-.158-4.348a2.372 2.372 0 0 0-2.236-2.21A91.112 91.112 0 0 0 12 5.75a91.11 91.11 0 0 0-5.856.192 2.372 2.372 0 0 0-2.236 2.21A62.667 62.667 0 0 0 3.75 12.5c0 1.638.074 3.146.16 4.335.083 1.18.999 2.097 2.182 2.188A78.45 78.45 0 0 0 12 19.25l.361-.002a.75.75 0 1 1 .006 1.5c-.385.001-.254.002-.367.002-2.375 0-4.48-.114-6.022-.232a3.847 3.847 0 0 1-3.565-3.576A63.008 63.008 0 0 1 2.25 12.5c0-1.674.076-3.226.162-4.453a3.872 3.872 0 0 1 3.634-3.602 94.013 94.013 0 0 1 2.228-.115l-.888-1.27a.75.75 0 0 1 1.228-.859l1.45 2.072c.62-.014 1.267-.023 1.936-.023.668 0 1.316.009 1.935.023l1.45-2.072Z"></path><path d="M23.02 15.938a.75.75 0 0 0-1.061.002l-3.922 3.936a.135.135 0 0 1-.191 0L15.9 17.925a.75.75 0 0 0-1.062 1.058l2.04 2.047a1.5 1.5 0 0 0 2.125 0L23.02 17a.75.75 0 0 0-.002-1.062Z" data-danmu-color="accent"></path><path d="M9.132 7.694c.578 0 1.046.468 1.047 1.046v1.73c0 .578-.47 1.047-1.047 1.047h-.883l-.158 1.427h1.105c.602 0 1.08.507 1.045 1.108l-.117 1.98a1.957 1.957 0 0 1-1.954 1.84H7.59a.592.592 0 0 1 0-1.183h.581c.41 0 .748-.32.772-.728l.109-1.834H7.938a1.046 1.046 0 0 1-1.04-1.162l.189-1.7c.059-.53.506-.931 1.04-.931h.869V8.877H7.43a.591.591 0 0 1 0-1.183h1.702Z"></path><path fill-rule="evenodd" d="M14.944 7.504a.591.591 0 1 1 .955.698l-.225.306c.765.159 1.34.837 1.34 1.649v2.208c0 .93-.754 1.684-1.684 1.684h-.808v.597h2.048a.592.592 0 0 1 0 1.183h-2.062a.591.591 0 0 1-1.155 0h-2.062a.592.592 0 0 1 0-1.183h2.048v-.597h-.806c-.93 0-1.684-.754-1.684-1.684v-2.208c0-.782.533-1.438 1.255-1.628l-.191-.215a.592.592 0 0 1 .884-.787l.643.724a.59.59 0 0 1 .123.222h.673l.708-.97Zm-2.912 4.861a.5.5 0 0 0 .5.5h.889v-1.043h-1.389v.543Zm2.412.5h.886a.5.5 0 0 0 .5-.5v-.543h-1.386v1.044Zm-1.911-3.209a.5.5 0 0 0-.5.5v.642h1.388V9.656h-.888Zm1.911 1.142h1.387v-.641a.5.5 0 0 0-.5-.5h-.887v1.141Z" clip-rule="evenodd"></path></svg></span>`
+const DANMAKU_SWITCH_OFF = `<span class="bui-danmaku-switch-off"><svg xmlns="http://www.w3.org/2000/svg" data-pointer="none" viewBox="0 0 24 24"><path d="M16.43 2.016a.75.75 0 0 0-1.044.185l-1.451 2.071A88.83 88.83 0 0 0 12 4.25c-.669 0-1.316.009-1.935.022l-1.45-2.071a.75.75 0 1 0-1.23.86l.89 1.269c-.827.034-1.577.073-2.23.115a3.872 3.872 0 0 0-3.633 3.602A64.147 64.147 0 0 0 2.25 12.5c0 1.681.076 3.226.163 4.442a3.847 3.847 0 0 0 3.565 3.575c1.541.118 3.647.233 6.022.233.113 0-.018-.001.367-.002a.75.75 0 0 0-.006-1.5c-.386 0-.25.002-.361.002-2.329 0-4.395-.112-5.908-.228a2.348 2.348 0 0 1-2.183-2.187A61.514 61.514 0 0 1 3.75 12.5c0-1.631.074-3.147.158-4.348a2.372 2.372 0 0 1 2.236-2.21A91.11 91.11 0 0 1 12 5.75c2.302 0 4.347.094 5.856.192a2.372 2.372 0 0 1 2.236 2.21c.084 1.201.158 2.716.158 4.348a.75.75 0 0 0 1.5.008V12.5c0-1.675-.076-3.227-.162-4.453a3.872 3.872 0 0 0-3.634-3.602 93.96 93.96 0 0 0-2.228-.115l.888-1.269a.75.75 0 0 0-.183-1.045Z"></path><path fill="none" stroke="currentColor" stroke-width="1.35" d="M15.656 15.255a3.702 3.702 0 1 1 5.235 5.235 3.702 3.702 0 0 1-5.235-5.235Z" data-danmu-color="stroke"></path><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.35" d="m15.656 15.255 5.235 5.234" data-danmu-color="stroke"></path><path d="M9.133 7.694c.578 0 1.047.468 1.047 1.046v1.73c0 .578-.47 1.047-1.047 1.047H8.25l-.158 1.427h1.104c.603 0 1.082.507 1.046 1.108l-.117 1.979a1.958 1.958 0 0 1-1.954 1.84H7.59a.592.592 0 0 1 0-1.182h.581c.41 0 .748-.32.772-.728l.109-1.834H7.94a1.046 1.046 0 0 1-1.04-1.162l.188-1.7c.059-.53.507-.931 1.04-.931h.87V8.877H7.43a.591.591 0 0 1 0-1.183h1.702ZM12.571 14.646c.327 0 .591.265.591.592 0 .326-.224.592-.59.592h-1.28a.592.592 0 0 1 0-1.184h1.28Z"></path><path fill-rule="evenodd" d="M14.945 7.504a.591.591 0 0 1 .955.698l-.224.306a1.684 1.684 0 0 1 1.339 1.649v2.029a.591.591 0 0 1-1.183 0v-.364h-1.387v1.228a1 1 0 0 1-1 1h-.91c-.93 0-1.685-.755-1.685-1.685v-2.208c0-.782.533-1.437 1.256-1.627l-.193-.216a.593.593 0 0 1 .885-.787l.643.725a.59.59 0 0 1 .123.22h.673l.708-.968Zm-2.912 4.861c0 .276.225.5.501.5h.888v-1.043h-1.389v.543Zm.501-2.708a.5.5 0 0 0-.5.5v.642h1.388V9.657h-.888Zm1.911 1.142h1.387v-.642a.5.5 0 0 0-.5-.5h-.887v1.142Z" clip-rule="evenodd"></path></svg></span>`
+
+const FONT_LABELS: Record<DanmakuFontFamily, [string, string]> = {
+  system: ["默认", "Default"],
+  sans: ["黑体", "Sans"],
+  serif: ["宋体", "Serif"],
+  rounded: ["圆体", "Rounded"],
+  monospace: ["等宽", "Mono"],
+}
 
 type DanmakuSource = "none" | "local" | "online"
-type DanmakuPanelTab = "source" | "display"
+
+type SettingManager = Artplayer["setting"] & {
+  active?: Setting[]
+  render: (option?: Setting[]) => void
+}
 
 export interface DanmakuControllerOptions {
   player: () => Artplayer | undefined
@@ -43,20 +60,13 @@ export class DanmakuController {
   private readonly options: DanmakuControllerOptions
   private player?: Artplayer
   private renderer?: DanmuJsRenderer
-  private panel?: HTMLDivElement
-  private panelOpen = false
-  private panelTab: DanmakuPanelTab = "source"
-  private searchInput?: HTMLInputElement
-  private statusElement?: HTMLDivElement
-  private matchElement?: HTMLDivElement
-  private candidatesElement?: HTMLDivElement
-  private sourceElement?: HTMLDivElement
   private toggleControl?: HTMLElement
-  private sourceControl?: HTMLElement
-  private settingsControl?: HTMLElement
-  private returnFocus?: HTMLElement
-  private hoverTimer?: ReturnType<typeof setTimeout>
-  private readonly cleanup: (() => void)[] = []
+  private sourceSetting?: Setting
+  private sourceSelector: Setting[] = []
+  private searchInput?: HTMLInputElement
+  private searchQuery = ""
+  private statusMessage = ""
+  private lastSearchResult?: DanmakuSearchResult
   private abortController?: AbortController
   private generation = 0
   private activeKey = ""
@@ -85,9 +95,10 @@ export class DanmakuController {
 
     this.player = player
     this.config = loadDanmakuConfig()
+    this.searchQuery = this.defaultQuery()
     this.renderer = new DanmuJsRenderer(player, this.config)
-    this.addControls()
-    this.createPanel()
+    this.addToggleControl()
+    this.installSettings()
     this.reload()
   }
 
@@ -99,21 +110,16 @@ export class DanmakuController {
       this.lastQuery = ""
       this.currentSource = "none"
       this.currentMatch = undefined
+      this.lastSearchResult = undefined
       this.renderer.reset()
-      this.candidatesElement?.replaceChildren()
-      this.renderMatch()
       this.setStatus("")
-      this.setPanelOpen(false)
-      this.setInputValue(this.defaultQuery())
+      this.searchQuery = this.defaultQuery()
+      this.refreshSourceMenu()
+      this.closeSettings()
     }
     const requestGeneration = ++this.generation
     this.abortController?.abort()
     void this.restorePriority(requestGeneration, key)
-  }
-
-  openPanel(tab: DanmakuPanelTab = "source", focus = false) {
-    this.setPanelTab(tab)
-    this.setPanelOpen(true, focus)
   }
 
   destroy() {
@@ -121,26 +127,26 @@ export class DanmakuController {
     this.destroyed = true
     this.generation += 1
     this.abortController?.abort()
-    clearTimeout(this.hoverTimer)
-    this.setPanelOpen(false)
-    this.cleanup.forEach((remove) => remove())
-    this.panel?.remove()
 
-    if (this.player) {
-      for (const name of [
-        "danmaku-search",
-        "danmaku-settings",
-        "danmaku-toggle",
-      ]) {
-        if (this.player.controls[name]) {
-          this.player.controls.remove(name)
-        }
+    const player = this.player
+    if (player) {
+      const more = player.setting.find(MORE_SETTING)
+      if (more?.selector) {
+        more.selector = more.selector.filter(
+          (item: Setting) =>
+            item.name !== SOURCE_SETTING && item.name !== DISPLAY_SETTING,
+        )
+      }
+      if (player.controls[TOGGLE_CONTROL]) {
+        player.controls.remove(TOGGLE_CONTROL)
       }
     }
 
     this.renderer?.destroy()
     this.renderer = undefined
     this.toggleControl = undefined
+    this.sourceSetting = undefined
+    this.sourceSelector = []
     this.player = undefined
   }
 
@@ -163,7 +169,7 @@ export class DanmakuController {
         false,
       )
       if (!matched && generation === this.generation) {
-        this.openPanel()
+        this.openSourceMenu(true)
       }
       return
     }
@@ -218,7 +224,6 @@ export class DanmakuController {
         episode_id: 0,
         episode_title: local.name,
       }
-      this.renderMatch()
       this.setStatus(this.text("已使用本地 XML", "Using local XML"))
     } catch (error) {
       if (generation !== this.generation || controller.signal.aborted) return
@@ -258,21 +263,30 @@ export class DanmakuController {
       if (generation !== this.generation || controller.signal.aborted) return
       this.loading = false
       this.setStatus(errorMessage(error))
-      this.openPanel()
+      this.openSourceMenu(true)
       return
     }
     if (generation !== this.generation || controller.signal.aborted) return
     this.loading = false
     if (response.code !== 200) {
       this.setStatus(response.message || this.text("搜索失败", "Search failed"))
-      this.openPanel()
+      this.openSourceMenu(true)
       return
     }
 
     const result = response.data
     this.lastQuery = result.query || query
-    this.setInputValue(result.suggested_query || query)
-    this.renderCandidates(result)
+    this.searchQuery = result.suggested_query || query
+    this.lastSearchResult = result
+    this.setStatus(
+      result.status === "matched"
+        ? this.text("已找到匹配", "Match found")
+        : result.status === "ambiguous"
+          ? this.text("请选择正确的剧集", "Select an episode")
+          : this.text("没有找到匹配", "No match found"),
+      false,
+    )
+    this.refreshSourceMenu()
     if (result.status === "matched" && result.episode_id && result.match) {
       await this.loadComments(
         result.episode_id,
@@ -280,7 +294,7 @@ export class DanmakuController {
         result.query || query,
         false,
       )
-      if (openOnSuccess) this.openPanel()
+      if (openOnSuccess) this.openSourceMenu()
       return
     }
     this.setStatus(
@@ -294,7 +308,7 @@ export class DanmakuController {
             "No match found; adjust the query",
           ),
     )
-    this.openPanel()
+    this.openSourceMenu()
   }
 
   private async loadComments(
@@ -327,7 +341,7 @@ export class DanmakuController {
         return false
       this.loading = false
       this.setStatus(errorMessage(error))
-      this.openPanel()
+      this.openSourceMenu(true)
       return false
     }
     if (generation !== this.generation || controller.signal.aborted) {
@@ -338,7 +352,7 @@ export class DanmakuController {
       this.setStatus(
         response.message || this.text("弹幕加载失败", "Failed to load danmaku"),
       )
-      this.openPanel()
+      this.openSourceMenu(true)
       return false
     }
 
@@ -353,14 +367,13 @@ export class DanmakuController {
     } catch (error) {
       if (generation !== this.generation) return false
       this.setStatus(errorMessage(error))
-      this.openPanel()
+      this.openSourceMenu(true)
       return false
     }
     if (generation !== this.generation) return false
 
     this.currentSource = "online"
     this.currentMatch = match
-    this.renderMatch()
     const partial = result.partial
       ? this.text(
           "；部分关联源不可用",
@@ -396,529 +409,593 @@ export class DanmakuController {
     return next
   }
 
-  private addControls() {
+  private addToggleControl() {
     const player = this.player
-    if (!player) return
+    if (!player || player.controls[TOGGLE_CONTROL]) return
 
-    if (!player.controls["danmaku-search"]) {
-      this.sourceControl = player.controls.add({
-        name: "danmaku-search",
-        index: 14,
-        position: "right",
-        html: playerIcon("source"),
-        tooltip: this.text("弹幕来源", "Danmaku source"),
-        click: () => this.togglePanel("source", this.sourceControl),
-      })
-    }
-
-    if (!player.controls["danmaku-settings"]) {
-      this.settingsControl = player.controls.add({
-        name: "danmaku-settings",
-        index: 13,
-        position: "right",
-        html: playerIcon("settings"),
-        tooltip: this.text("弹幕设置", "Danmaku settings"),
-        click: () => this.togglePanel("display", this.settingsControl),
-      })
-    }
-
-    if (!player.controls["danmaku-toggle"]) {
-      this.toggleControl = player.controls.add({
-        name: "danmaku-toggle",
-        index: 12,
-        position: "right",
-        html: `${playerIcon("danmaku").outerHTML}<span class="openlist-danmaku-switch" aria-hidden="true"></span>`,
-        tooltip: this.text("弹幕开关", "Toggle danmaku"),
-        click: () => {
-          const next = {
-            ...this.config,
-            modes: { ...this.config.modes },
-            visible: !this.config.visible,
-          }
-          this.applyConfig(next)
-        },
-      })
-    }
-    for (const control of [this.sourceControl, this.settingsControl]) {
-      control?.setAttribute("aria-haspopup", "dialog")
-      control?.setAttribute("aria-controls", PANEL_ID)
-      control?.setAttribute("aria-expanded", "false")
-    }
-    this.sourceControl?.setAttribute(
-      "aria-label",
-      this.text("弹幕来源", "Danmaku source"),
-    )
-    this.settingsControl?.setAttribute(
-      "aria-label",
-      this.text("弹幕设置", "Danmaku settings"),
-    )
-    if (this.settingsControl) {
-      this.listen(this.settingsControl, "pointerenter", (event) => {
-        if ((event as PointerEvent).pointerType !== "mouse") return
-        clearTimeout(this.hoverTimer)
-        this.hoverTimer = setTimeout(() => this.openPanel("display"), 180)
-      })
-      this.listen(this.settingsControl, "pointerleave", (event) => {
-        if ((event as PointerEvent).pointerType === "mouse")
-          this.schedulePanelClose()
-      })
-    }
+    this.toggleControl = player.controls.add({
+      name: TOGGLE_CONTROL,
+      index: 12,
+      position: "right",
+      html: DANMAKU_SWITCH_ON,
+      tooltip: this.text("弹幕开关", "Toggle danmaku"),
+      click: () => {
+        this.applyConfig({
+          ...this.config,
+          modes: { ...this.config.modes },
+          visible: !this.config.visible,
+        })
+      },
+    })
     this.syncToggleControl()
   }
 
-  private listen(target: EventTarget, name: string, handler: EventListener) {
-    target.addEventListener(name, handler)
-    this.cleanup.push(() => target.removeEventListener(name, handler))
-  }
-
-  private togglePanel(tab: DanmakuPanelTab, trigger?: HTMLElement) {
-    clearTimeout(this.hoverTimer)
-    if (this.panelOpen && this.panelTab === tab) {
-      this.setPanelOpen(false)
-    } else {
-      this.returnFocus = trigger
-      this.openPanel(tab, true)
-    }
-  }
-
-  private schedulePanelClose() {
-    clearTimeout(this.hoverTimer)
-    if (
-      this.panelTab === "display" &&
-      !this.panel?.contains(document.activeElement)
-    ) {
-      this.hoverTimer = setTimeout(() => this.setPanelOpen(false), 250)
-    }
-  }
-
-  private createPanel() {
+  private installSettings() {
     const player = this.player
-    if (!player || this.panel) return
+    if (!player) return
 
-    const panel = document.createElement("div")
-    panel.id = PANEL_ID
-    panel.className = "openlist-danmaku-panel"
-    panel.hidden = true
-    panel.setAttribute("role", "dialog")
-    panel.setAttribute("aria-label", this.text("弹幕", "Danmaku"))
-    panel.innerHTML = `
-      <div class="openlist-danmaku-panel__header">
-        <div>
-          <strong>${this.text("弹幕", "Danmaku")}</strong>
-          <div class="openlist-danmaku-source"></div>
-        </div>
-        <button type="button" data-action="close" aria-label="${this.text("关闭", "Close")}">${playerIcon("close").outerHTML}</button>
-      </div>
-      <div class="openlist-danmaku-tabs" role="tablist">
-        <button type="button" role="tab" data-tab="display" data-active="false">${this.text("弹幕设置", "Settings")}</button>
-        <button type="button" role="tab" data-tab="source" data-active="true">${this.text("弹幕来源", "Source")}</button>
-      </div>
-      <div class="openlist-danmaku-tab-panel" data-tab-panel="source">
-        <div class="openlist-danmaku-actions">
-          <button type="button" data-action="local">${this.text("本地 XML", "Local XML")}</button>
-          <button type="button" data-action="online">${this.text("在线聚合", "Online")}</button>
-          <button type="button" data-action="clear">${this.text("清除匹配", "Clear match")}</button>
-        </div>
-        <form class="openlist-danmaku-search">
-          <input type="search" aria-label="${this.text("搜索弹幕来源", "Search danmaku sources")}" maxlength="256" autocomplete="off" placeholder="${this.text("剧名 S01E01", "Title S01E01")}" />
-          <button type="submit" aria-label="${this.text("搜索", "Search")}">${playerIcon("search").outerHTML}</button>
-        </form>
-        <div class="openlist-danmaku-status" role="status"></div>
-        <div class="openlist-danmaku-match"></div>
-        <div class="openlist-danmaku-candidates"></div>
-      </div>
-      <div class="openlist-danmaku-tab-panel" data-tab-panel="display" data-active="false">
-        <div class="openlist-danmaku-settings">
-          <section class="openlist-danmaku-settings-group">
-            <div class="openlist-danmaku-settings-title">${this.text("显示模式", "Display modes")}</div>
-            <div class="openlist-danmaku-checks">
-              <label><input type="checkbox" data-danmaku-mode="scroll" /><span>${this.text("滚动", "Scroll")}</span></label>
-              <label><input type="checkbox" data-danmaku-mode="top" /><span>${this.text("顶部", "Top")}</span></label>
-              <label><input type="checkbox" data-danmaku-mode="bottom" /><span>${this.text("底部", "Bottom")}</span></label>
-            </div>
-          </section>
-          <section class="openlist-danmaku-settings-group">
-            <div class="openlist-danmaku-setting-row">
-              <span>${this.text("字体", "Font")}</span>
-              <div class="openlist-danmaku-segmented" data-danmaku-segment="fontFamily">
-                <button type="button" data-value="system">${this.text("默认", "Default")}</button>
-                <button type="button" data-value="sans">${this.text("黑体", "Sans")}</button>
-                <button type="button" data-value="serif">${this.text("宋体", "Serif")}</button>
-                <button type="button" data-value="rounded">${this.text("圆体", "Rounded")}</button>
-                <button type="button" data-value="monospace">${this.text("等宽", "Mono")}</button>
-              </div>
-            </div>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("字号", "Font size")}</span>
-              <input type="range" min="16" max="36" step="1" data-danmaku-setting="fontSize" />
-              <output data-danmaku-output="fontSize"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("字重", "Weight")}</span>
-              <input type="range" min="100" max="900" step="100" data-danmaku-setting="fontWeight" />
-              <output data-danmaku-output="fontWeight"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("行间距", "Line spacing")}</span>
-              <input type="range" min="0" max="24" step="1" data-danmaku-setting="lineSpacing" />
-              <output data-danmaku-output="lineSpacing"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("描边", "Outline")}</span>
-              <input type="range" min="0" max="3" step="0.1" data-danmaku-setting="outline" />
-              <output data-danmaku-output="outline"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("透明度", "Opacity")}</span>
-              <input type="range" min="10" max="100" step="5" data-danmaku-setting="opacity" />
-              <output data-danmaku-output="opacity"></output>
-            </label>
-          </section>
-          <section class="openlist-danmaku-settings-group">
-            <label class="openlist-danmaku-range">
-              <span>${this.text("显示区域", "Display area")}</span>
-              <input type="range" min="25" max="100" step="5" data-danmaku-setting="displayArea" />
-              <output data-danmaku-output="displayArea"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("速度", "Speed")}</span>
-              <input type="range" min="0.5" max="2" step="0.05" data-danmaku-setting="speed" />
-              <output data-danmaku-output="speed"></output>
-            </label>
-            <label class="openlist-danmaku-range">
-              <span>${this.text("弹幕间距", "Danmaku spacing")}</span>
-              <input type="range" min="0" max="300" step="10" data-danmaku-setting="spacing" />
-              <output data-danmaku-output="spacing"></output>
-            </label>
-          </section>
-          <section class="openlist-danmaku-settings-group">
-            <div class="openlist-danmaku-checks openlist-danmaku-checks--stacked">
-              <label><input type="checkbox" data-danmaku-setting="antiOverlap" /><span>${this.text("防止重叠", "Prevent overlap")}</span></label>
-              <label><input type="checkbox" data-danmaku-setting="followPlaybackRate" /><span>${this.text("跟随视频倍速", "Follow playback rate")}</span></label>
-              <label><input type="checkbox" data-danmaku-setting="heatmap" /><span>${this.text("热度图", "Heatmap")}</span></label>
-              <label><input type="checkbox" data-danmaku-setting="traditionalToSimplified" /><span>${this.text("繁体转简体", "Traditional to Simplified")}</span></label>
-            </div>
-          </section>
-          <button class="openlist-danmaku-reset" type="button" data-action="reset">${this.text("恢复默认", "Reset to default")}</button>
-        </div>
-      </div>
-    `
-    player.template.$player.appendChild(panel)
-    this.panel = panel
-    this.searchInput = panel.querySelector("input") ?? undefined
-    this.statusElement =
-      panel.querySelector(".openlist-danmaku-status") ?? undefined
-    this.matchElement =
-      panel.querySelector(".openlist-danmaku-match") ?? undefined
-    this.candidatesElement =
-      panel.querySelector(".openlist-danmaku-candidates") ?? undefined
-    this.sourceElement =
-      panel.querySelector(".openlist-danmaku-source") ?? undefined
-    this.listen(panel, "pointerenter", () => clearTimeout(this.hoverTimer))
-    this.listen(panel, "pointerleave", (event) => {
-      if ((event as PointerEvent).pointerType === "mouse")
-        this.schedulePanelClose()
-    })
-    this.listen(document, "pointerdown", (event) => {
-      const target = event.target as Node
-      if (
-        this.panelOpen &&
-        !panel.contains(target) &&
-        !this.sourceControl?.contains(target) &&
-        !this.settingsControl?.contains(target)
-      ) {
-        this.setPanelOpen(false)
-      }
-    })
-    this.listen(panel, "keydown", (event) => {
-      const key = event as KeyboardEvent
-      if (key.key === "Escape") {
-        key.preventDefault()
-        key.stopPropagation()
-        this.setPanelOpen(false, true)
-      } else if (
-        ["ArrowLeft", "ArrowRight"].includes(key.key) &&
-        (key.target as HTMLElement).matches("[role='tab']")
-      ) {
-        key.preventDefault()
-        this.setPanelTab(this.panelTab === "source" ? "display" : "source")
-        panel
-          .querySelector<HTMLElement>(`[data-tab="${this.panelTab}"]`)
-          ?.focus()
-      }
-    })
-    const close = () => this.setPanelOpen(false)
-    player.on("openlist:close-panels", close)
-    this.cleanup.push(() => player.off("openlist:close-panels", close))
-
-    panel.addEventListener("pointerdown", (event) => event.stopPropagation())
-    panel.addEventListener("mousedown", (event) => event.stopPropagation())
-    panel.addEventListener("click", (event) => {
-      event.stopPropagation()
-      const target = event.target as HTMLElement
-      const tab = target.closest<HTMLElement>("[data-tab]")?.dataset.tab
-      if (tab === "source" || tab === "display") {
-        this.setPanelTab(tab)
-        return
-      }
-
-      const segment = target.closest<HTMLElement>("[data-danmaku-segment]")
-      const button = target.closest<HTMLButtonElement>("[data-value]")
-      if (segment && button) {
-        this.applySegmentValue(segment, button)
-      }
-    })
-    panel.addEventListener("input", (event) => {
-      const target = event.target
-      if (target instanceof HTMLInputElement && target.type === "range") {
-        this.applyControlValue(target)
-      }
-    })
-    panel.addEventListener("change", (event) => {
-      const target = event.target
-      if (target instanceof HTMLInputElement && target.type === "checkbox") {
-        this.applyControlValue(target)
-      }
-    })
-
-    panel
-      .querySelector("[data-action='close']")
-      ?.addEventListener("click", () => {
-        this.setPanelOpen(false, true)
-      })
-    panel
-      .querySelector("[data-action='reset']")
-      ?.addEventListener("click", () =>
-        this.applyConfig(createDefaultDanmakuConfig()),
-      )
-    panel
-      .querySelector("[data-action='local']")
-      ?.addEventListener("click", () => {
-        void this.restoreLocal()
-      })
-    panel
-      .querySelector("[data-action='online']")
-      ?.addEventListener("click", () => {
-        void this.restoreOnline()
-      })
-    panel
-      .querySelector("[data-action='clear']")
-      ?.addEventListener("click", () => {
-        void this.clearMapping()
-      })
-    panel.querySelector("form")?.addEventListener("submit", (event) => {
-      event.preventDefault()
-      const generation = ++this.generation
-      this.abortController?.abort()
-      void this.search(this.searchInput?.value || "", generation, true)
-    })
-
-    this.syncConfigControls()
-    this.setPanelTab(this.panelTab)
-  }
-
-  private applyControlValue(input: HTMLInputElement) {
-    const setting = input.dataset.danmakuSetting
-    const mode = input.dataset.danmakuMode as DanmakuEngineMode | undefined
-    const next: DanmakuConfig = {
-      ...this.config,
-      modes: { ...this.config.modes },
+    this.sourceSelector = this.buildSourceSelector()
+    this.sourceSetting = {
+      name: SOURCE_SETTING,
+      html: this.text("弹幕来源", "Danmaku source"),
+      selector: this.sourceSelector,
+    }
+    const displaySetting: Setting = {
+      name: DISPLAY_SETTING,
+      html: this.text("弹幕设置", "Danmaku settings"),
+      selector: this.buildDisplaySelector(),
     }
 
-    if (mode) {
-      next.modes[mode] = input.checked
-    } else if (setting === "fontSize") {
-      next.fontSize = clamp(Number(input.value), 16, 36)
-    } else if (setting === "fontWeight") {
-      next.fontWeight = clamp(
-        Math.round(Number(input.value) / 100) * 100,
+    const more = player.setting.find(MORE_SETTING)
+    const selector = (more?.selector ?? []).filter(
+      (item: Setting) =>
+        item.name !== SOURCE_SETTING && item.name !== DISPLAY_SETTING,
+    )
+    selector.push(this.sourceSetting, displaySetting)
+
+    if (more) {
+      player.setting.update({
+        name: MORE_SETTING,
+        html: more.html,
+        selector,
+      })
+    } else {
+      player.setting.add({
+        name: MORE_SETTING,
+        html: this.text("更多", "More"),
+        selector,
+      })
+    }
+    this.syncSettingControls()
+  }
+
+  private buildDisplaySelector(): Setting[] {
+    const font = (value: DanmakuFontFamily) => this.text(...FONT_LABELS[value])
+
+    return [
+      this.switchSetting("visible", this.text("弹幕开关", "Danmaku"), () => ({
+        ...this.config,
+        modes: { ...this.config.modes },
+        visible: !this.config.visible,
+      })),
+      this.switchSetting(
+        "mode-scroll",
+        this.text("滚动弹幕", "Scrolling"),
+        () => this.nextModeConfig("scroll"),
+      ),
+      this.switchSetting("mode-top", this.text("顶部弹幕", "Top"), () =>
+        this.nextModeConfig("top"),
+      ),
+      this.switchSetting("mode-bottom", this.text("底部弹幕", "Bottom"), () =>
+        this.nextModeConfig("bottom"),
+      ),
+      {
+        name: "openlist-danmaku-fontFamily",
+        html: this.text("字体", "Font"),
+        tooltip: font(this.config.fontFamily),
+        selector: (Object.keys(FONT_LABELS) as DanmakuFontFamily[]).map(
+          (value) => ({
+            name: `openlist-danmaku-fontFamily-${value}`,
+            html: font(value),
+            value,
+            default: this.config.fontFamily === value,
+          }),
+        ),
+        onSelect: (item) => {
+          this.applyConfig({
+            ...this.config,
+            modes: { ...this.config.modes },
+            fontFamily: item.value as DanmakuFontFamily,
+          })
+          return font(item.value as DanmakuFontFamily)
+        },
+      },
+      this.rangeSetting(
+        "fontSize",
+        this.text("字号", "Font size"),
+        16,
+        36,
+        1,
+        this.config.fontSize,
+        (value) => `${value}px`,
+        (value) => ({ fontSize: value }),
+      ),
+      this.rangeSetting(
+        "fontWeight",
+        this.text("字重", "Weight"),
         100,
         900,
-      )
-    } else if (setting === "lineSpacing") {
-      next.lineSpacing = clamp(Math.round(Number(input.value)), 0, 24)
-    } else if (setting === "outline") {
-      next.outline = round(clamp(Number(input.value), 0, 3), 1)
-    } else if (setting === "opacity") {
-      next.opacity = clamp(Number(input.value) / 100, 0.1, 1)
-    } else if (setting === "displayArea") {
-      next.displayArea = clamp(Math.round(Number(input.value)), 25, 100)
-    } else if (setting === "speed") {
-      next.speed = round(clamp(Number(input.value), 0.5, 2), 2)
-    } else if (setting === "spacing") {
-      next.spacing = clamp(Math.round(Number(input.value)), 0, 300)
-    } else if (setting === "antiOverlap") {
-      next.antiOverlap = input.checked
-    } else if (setting === "followPlaybackRate") {
-      next.followPlaybackRate = input.checked
-    } else if (setting === "heatmap") {
-      next.heatmap = input.checked
-    } else if (setting === "traditionalToSimplified") {
-      next.traditionalToSimplified = input.checked
-    } else {
-      return
-    }
-
-    this.applyConfig(next)
+        100,
+        this.config.fontWeight,
+        String,
+        (value) => ({ fontWeight: value }),
+      ),
+      this.rangeSetting(
+        "lineSpacing",
+        this.text("行间距", "Line spacing"),
+        0,
+        24,
+        1,
+        this.config.lineSpacing,
+        (value) => `${value}px`,
+        (value) => ({ lineSpacing: value }),
+      ),
+      this.rangeSetting(
+        "outline",
+        this.text("描边", "Outline"),
+        0,
+        3,
+        0.1,
+        this.config.outline,
+        (value) => `${formatNumber(value)}px`,
+        (value) => ({ outline: value }),
+      ),
+      this.rangeSetting(
+        "opacity",
+        this.text("透明度", "Opacity"),
+        10,
+        100,
+        5,
+        Math.round(this.config.opacity * 100),
+        (value) => `${value}%`,
+        (value) => ({ opacity: value / 100 }),
+      ),
+      this.rangeSetting(
+        "displayArea",
+        this.text("显示区域", "Display area"),
+        25,
+        100,
+        5,
+        this.config.displayArea,
+        (value) => `${value}%`,
+        (value) => ({ displayArea: value }),
+      ),
+      this.rangeSetting(
+        "speed",
+        this.text("速度", "Speed"),
+        0.5,
+        2,
+        0.05,
+        this.config.speed,
+        (value) => `${formatNumber(value)}x`,
+        (value) => ({ speed: value }),
+      ),
+      this.rangeSetting(
+        "spacing",
+        this.text("弹幕间距", "Danmaku spacing"),
+        0,
+        300,
+        10,
+        this.config.spacing,
+        (value) => `${value}px`,
+        (value) => ({ spacing: value }),
+      ),
+      this.switchSetting(
+        "antiOverlap",
+        this.text("防止重叠", "Prevent overlap"),
+        (value) => this.patchConfig({ antiOverlap: !value }),
+      ),
+      this.switchSetting(
+        "followPlaybackRate",
+        this.text("跟随视频倍速", "Follow playback rate"),
+        (value) => this.patchConfig({ followPlaybackRate: !value }),
+      ),
+      this.switchSetting("heatmap", this.text("热度图", "Heatmap"), (value) =>
+        this.patchConfig({ heatmap: !value }),
+      ),
+      this.switchSetting(
+        "traditionalToSimplified",
+        this.text("繁体转简体", "Traditional to Simplified"),
+        (value) => this.patchConfig({ traditionalToSimplified: !value }),
+      ),
+      {
+        name: "openlist-danmaku-reset",
+        html: this.text("恢复默认", "Reset to default"),
+        onClick: () => {
+          this.applyConfig(createDefaultDanmakuConfig())
+          return ""
+        },
+      },
+    ]
   }
 
-  private applySegmentValue(segment: HTMLElement, button: HTMLButtonElement) {
-    const setting = segment.dataset.danmakuSegment
-    const value = button.dataset.value
-    const next: DanmakuConfig = {
-      ...this.config,
-      modes: { ...this.config.modes },
+  private switchSetting(
+    key: string,
+    html: string,
+    next: (current: boolean) => DanmakuConfig,
+  ): Setting {
+    const current = this.switchValue(key)
+    return {
+      name: `openlist-danmaku-${key}`,
+      html,
+      switch: current,
+      onSwitch: () => {
+        const current = this.switchValue(key)
+        this.applyConfig(next(current))
+        return !current
+      },
+    }
+  }
+
+  private rangeSetting(
+    key: string,
+    html: string,
+    min: number,
+    max: number,
+    step: number,
+    value: number,
+    format: (value: number) => string,
+    patch: (value: number) => Partial<DanmakuConfig>,
+  ): Setting {
+    const update = (item: SettingOption) => {
+      const next = clamp(item.range?.[0] ?? value, min, max)
+      this.applyConfig({
+        ...this.config,
+        modes: { ...this.config.modes },
+        ...patch(next),
+      })
+      return format(next)
+    }
+    return {
+      name: `openlist-danmaku-${key}`,
+      html,
+      tooltip: format(value),
+      range: [value, min, max, step],
+      mounted: (_panel, item) => {
+        item.$range?.setAttribute("aria-label", html)
+      },
+      onChange: update,
+      onRange: update,
+    }
+  }
+
+  private buildSourceSelector(): Setting[] {
+    const selector: Setting[] = [
+      {
+        name: "openlist-danmaku-search",
+        html: this.createSearchForm(),
+        onClick: () => "",
+      },
+    ]
+
+    if (this.currentMatch) {
+      selector.push({
+        name: "openlist-danmaku-current",
+        html: this.text("当前来源", "Current source"),
+        tooltip: `${this.currentMatch.anime_title} · ${this.currentMatch.episode_title}`,
+        onClick: () => "",
+      })
+    }
+    if (this.options.getLocalXml?.()) {
+      selector.push({
+        name: "openlist-danmaku-local",
+        html: this.text("本地 XML", "Local XML"),
+        onClick: () => {
+          void this.restoreLocal()
+          return ""
+        },
+      })
+    }
+    selector.push(
+      {
+        name: "openlist-danmaku-online",
+        html: this.text("在线聚合", "Online"),
+        onClick: () => {
+          void this.restoreOnline()
+          return ""
+        },
+      },
+      {
+        name: "openlist-danmaku-clear",
+        html: this.text("清除匹配", "Clear match"),
+        onClick: () => {
+          void this.clearMapping()
+          return ""
+        },
+      },
+    )
+
+    if (this.statusMessage) {
+      selector.push({
+        name: "openlist-danmaku-status",
+        html: this.text("状态", "Status"),
+        tooltip: this.statusMessage,
+        onClick: () => "",
+      })
     }
 
-    if (setting === "fontFamily") {
-      next.fontFamily = value as DanmakuFontFamily
-    } else {
-      return
+    for (const [index, anime] of (
+      this.lastSearchResult?.candidates ?? []
+    ).entries()) {
+      selector.push({
+        name: `openlist-danmaku-anime-${anime.anime_id}-${index}`,
+        html: anime.anime_title,
+        tooltip: anime.type_description || anime.type,
+        selector: anime.episodes.map((episode) => ({
+          name: `openlist-danmaku-episode-${anime.anime_id}-${episode.episode_id}`,
+          html: episode.episode_title,
+          value: episode.episode_id,
+          default: this.lastSearchResult?.episode_id === episode.episode_id,
+        })),
+        onSelect: (item) => {
+          const episode = anime.episodes.find(
+            (candidate) => candidate.episode_id === Number(item.value),
+          )
+          if (episode) {
+            void this.selectEpisode(
+              anime,
+              episode.episode_id,
+              episode.episode_title,
+            )
+          }
+          return item.html
+        },
+      })
     }
-    this.applyConfig(next)
+
+    return selector
+  }
+
+  private createSearchForm() {
+    const form = document.createElement("form")
+    const input = document.createElement("input")
+    input.type = "search"
+    input.maxLength = 256
+    input.autocomplete = "off"
+    input.placeholder = this.text("剧名 S01E01", "Title S01E01")
+    input.setAttribute(
+      "aria-label",
+      this.text("搜索弹幕来源", "Search danmaku sources"),
+    )
+    input.value = this.searchQuery
+    input.style.width = "160px"
+    input.style.minWidth = "0"
+    input.style.padding = "2px 0"
+    input.style.border = "0"
+    input.style.outline = "0"
+    input.style.background = "transparent"
+    input.style.color = "inherit"
+    input.style.font = "inherit"
+    input.style.textShadow = "none"
+    this.searchInput = input
+
+    const submit = document.createElement("button")
+    submit.type = "submit"
+    submit.textContent = this.text("搜索", "Search")
+    submit.style.marginLeft = "auto"
+    submit.style.border = "0"
+    submit.style.background = "transparent"
+    submit.style.color = "var(--art-theme)"
+    submit.style.cursor = "pointer"
+    submit.style.font = "inherit"
+    submit.style.fontSize = "12px"
+    submit.style.textShadow = "none"
+
+    form.style.display = "flex"
+    form.style.width = "100%"
+    form.style.minWidth = "0"
+    form.style.alignItems = "center"
+    form.append(input, submit)
+    form.addEventListener("pointerdown", (event) => event.stopPropagation())
+    form.addEventListener("click", (event) => event.stopPropagation())
+    form.addEventListener("submit", (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      this.searchQuery = input.value
+      const generation = ++this.generation
+      this.abortController?.abort()
+      void this.search(input.value, generation, true)
+    })
+    return form
+  }
+
+  private refreshSourceMenu(open = false) {
+    const player = this.player
+    if (!player || !this.sourceSetting) return
+
+    const wasActive = this.isSourceMenuActive()
+    const selector = this.buildSourceSelector()
+    this.sourceSelector = selector
+    player.setting.update({
+      name: SOURCE_SETTING,
+      html: this.sourceSetting.html,
+      selector,
+    })
+    if (open) {
+      this.openSourceMenu()
+    } else if (wasActive) {
+      ;(player.setting as SettingManager).render(selector)
+    }
+  }
+
+  private openSourceMenu(focus = false) {
+    const player = this.player
+    if (!player) return
+    const setting = player.setting as SettingManager
+    const more = player.setting.find(MORE_SETTING)
+    if (!more?.selector) return
+
+    setting.show = true
+    player.controls.show = true
+    setting.render(more.selector)
+    setting.render(this.sourceSelector)
+    if (focus && player.template.$player.dataset.openlistInput !== "touch") {
+      window.setTimeout(() => this.searchInput?.focus(), 0)
+    }
+  }
+
+  private isSourceMenuActive() {
+    return (
+      this.player &&
+      (this.player.setting as SettingManager).active === this.sourceSelector
+    )
+  }
+
+  private closeSettings() {
+    if (!this.player) return
+    this.player.setting.show = false
   }
 
   private applyConfig(config: DanmakuConfig) {
     this.config = config
     saveDanmakuConfig(config)
     void this.renderer?.updateConfig(config)
-    this.syncConfigControls()
+    this.syncSettingControls()
     this.syncToggleControl()
   }
 
-  private syncConfigControls() {
-    const panel = this.panel
-    if (!panel) return
+  private syncSettingControls() {
+    const player = this.player
+    if (!player) return
+    const find = (name: string) => player.setting.find(name)
 
-    for (const mode of ["scroll", "top", "bottom"] as const) {
-      const input = panel.querySelector<HTMLInputElement>(
-        `[data-danmaku-mode="${mode}"]`,
-      )
-      if (input) input.checked = this.config.modes[mode]
-    }
-
-    const fontSize = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='fontSize']",
-    )
-    if (fontSize) fontSize.value = String(this.config.fontSize)
-    const fontWeight = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='fontWeight']",
-    )
-    if (fontWeight) fontWeight.value = String(this.config.fontWeight)
-    const lineSpacing = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='lineSpacing']",
-    )
-    if (lineSpacing) lineSpacing.value = String(this.config.lineSpacing)
-    const opacity = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='opacity']",
-    )
-    if (opacity) opacity.value = String(Math.round(this.config.opacity * 100))
-    const outline = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='outline']",
-    )
-    if (outline) outline.value = String(this.config.outline)
-    const displayArea = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='displayArea']",
-    )
-    if (displayArea) displayArea.value = String(this.config.displayArea)
-    const speed = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='speed']",
-    )
-    if (speed) speed.value = String(this.config.speed)
-    const spacing = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='spacing']",
-    )
-    if (spacing) spacing.value = String(this.config.spacing)
-
-    const fontSizeOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='fontSize']",
-    )
-    if (fontSizeOutput) fontSizeOutput.value = `${this.config.fontSize}px`
-    const fontWeightOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='fontWeight']",
-    )
-    if (fontWeightOutput) {
-      fontWeightOutput.value = String(this.config.fontWeight)
-    }
-    const lineSpacingOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='lineSpacing']",
-    )
-    if (lineSpacingOutput) {
-      lineSpacingOutput.value = `${this.config.lineSpacing}px`
-    }
-    const opacityOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='opacity']",
-    )
-    if (opacityOutput) {
-      opacityOutput.value = `${Math.round(this.config.opacity * 100)}%`
-    }
-    const outlineOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='outline']",
-    )
-    if (outlineOutput) {
-      outlineOutput.value = `${formatNumber(this.config.outline)}px`
-    }
-    const displayAreaOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='displayArea']",
-    )
-    if (displayAreaOutput) {
-      displayAreaOutput.value = `${this.config.displayArea}%`
-    }
-    const speedOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='speed']",
-    )
-    if (speedOutput) {
-      speedOutput.value = `${formatNumber(this.config.speed)}x`
-    }
-    const spacingOutput = panel.querySelector<HTMLOutputElement>(
-      "[data-danmaku-output='spacing']",
-    )
-    if (spacingOutput) {
-      spacingOutput.value = `${this.config.spacing}px`
+    const switches: Array<[string, boolean]> = [
+      ["visible", this.config.visible],
+      ["mode-scroll", this.config.modes.scroll],
+      ["mode-top", this.config.modes.top],
+      ["mode-bottom", this.config.modes.bottom],
+      ["antiOverlap", this.config.antiOverlap],
+      ["followPlaybackRate", this.config.followPlaybackRate],
+      ["heatmap", this.config.heatmap],
+      ["traditionalToSimplified", this.config.traditionalToSimplified],
+    ]
+    for (const [key, value] of switches) {
+      const item = find(`openlist-danmaku-${key}`)
+      if (item) item.switch = value
     }
 
-    this.syncSegmentState("fontFamily", this.config.fontFamily)
-
-    for (const setting of [
-      "antiOverlap",
-      "followPlaybackRate",
-      "heatmap",
-      "traditionalToSimplified",
-    ] as const) {
-      const input = panel.querySelector<HTMLInputElement>(
-        `[data-danmaku-setting="${setting}"]`,
-      )
-      if (input) input.checked = this.config[setting]
+    const ranges: Array<
+      [string, number, number, number, number, (value: number) => string]
+    > = [
+      ["fontSize", this.config.fontSize, 16, 36, 1, (value) => `${value}px`],
+      [
+        "fontWeight",
+        this.config.fontWeight,
+        100,
+        900,
+        100,
+        (value) => String(value),
+      ],
+      [
+        "lineSpacing",
+        this.config.lineSpacing,
+        0,
+        24,
+        1,
+        (value) => `${value}px`,
+      ],
+      [
+        "outline",
+        this.config.outline,
+        0,
+        3,
+        0.1,
+        (value) => `${formatNumber(value)}px`,
+      ],
+      [
+        "opacity",
+        Math.round(this.config.opacity * 100),
+        10,
+        100,
+        5,
+        (value) => `${value}%`,
+      ],
+      [
+        "displayArea",
+        this.config.displayArea,
+        25,
+        100,
+        5,
+        (value) => `${value}%`,
+      ],
+      [
+        "speed",
+        this.config.speed,
+        0.5,
+        2,
+        0.05,
+        (value) => `${formatNumber(value)}x`,
+      ],
+      ["spacing", this.config.spacing, 0, 300, 10, (value) => `${value}px`],
+    ]
+    for (const [key, value, min, max, step, format] of ranges) {
+      const item = find(`openlist-danmaku-${key}`)
+      if (!item) continue
+      item.range = [value, min, max, step]
+      item.tooltip = format(value)
     }
-  }
 
-  private syncSegmentState(setting: string, value: string) {
-    const buttons = this.panel?.querySelectorAll<HTMLButtonElement>(
-      `[data-danmaku-segment="${setting}"] [data-value]`,
-    )
-    buttons?.forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.value === value)
-      button.setAttribute(
-        "aria-pressed",
-        String(button.dataset.value === value),
-      )
-    })
+    const font = find("openlist-danmaku-fontFamily")
+    if (font) {
+      font.tooltip = this.text(...FONT_LABELS[this.config.fontFamily])
+      for (const option of font.selector ?? []) {
+        const current = option.value === this.config.fontFamily
+        option.default = current
+        option.$item?.classList.toggle("art-current", current)
+      }
+    }
   }
 
   private syncToggleControl() {
-    this.toggleControl?.classList.toggle("is-active", this.config.visible)
-    this.toggleControl?.setAttribute(
-      "aria-pressed",
-      String(this.config.visible),
+    if (!this.toggleControl) return
+    this.toggleControl.classList.toggle("is-active", this.config.visible)
+    this.toggleControl.setAttribute("aria-pressed", String(this.config.visible))
+    this.toggleControl.setAttribute(
+      "aria-label",
+      this.text(
+        this.config.visible ? "关闭弹幕" : "开启弹幕",
+        this.config.visible ? "Hide danmaku" : "Show danmaku",
+      ),
     )
-    const label = this.text(
-      this.config.visible ? "关闭弹幕" : "开启弹幕",
-      this.config.visible ? "Hide danmaku" : "Show danmaku",
-    )
-    this.toggleControl?.setAttribute("aria-label", label)
-    this.toggleControl
-      ?.querySelector(".openlist-player-icon")
-      ?.replaceWith(playerIcon(this.config.visible ? "danmaku" : "danmakuOff"))
+    this.toggleControl.innerHTML = this.config.visible
+      ? DANMAKU_SWITCH_ON
+      : DANMAKU_SWITCH_OFF
+  }
+
+  private switchValue(key: string) {
+    if (key === "visible") return this.config.visible
+    if (key === "mode-scroll") return this.config.modes.scroll
+    if (key === "mode-top") return this.config.modes.top
+    if (key === "mode-bottom") return this.config.modes.bottom
+    return this.config[key as keyof DanmakuConfig] as boolean
+  }
+
+  private nextModeConfig(mode: "scroll" | "top" | "bottom"): DanmakuConfig {
+    return {
+      ...this.config,
+      modes: {
+        ...this.config.modes,
+        [mode]: !this.config.modes[mode],
+      },
+    }
+  }
+
+  private patchConfig(patch: Partial<DanmakuConfig>): DanmakuConfig {
+    return {
+      ...this.config,
+      ...patch,
+      modes: { ...this.config.modes, ...patch.modes },
+    }
   }
 
   private async restoreLocal() {
@@ -952,7 +1029,7 @@ export class DanmakuController {
         mapping.query,
         false,
       )
-      if (loaded) this.setPanelOpen(false)
+      if (loaded) this.closeSettings()
       return
     }
     const generation = ++this.generation
@@ -989,57 +1066,6 @@ export class DanmakuController {
     writeMappings(mappings)
   }
 
-  private renderCandidates(result: DanmakuSearchResult) {
-    if (!this.candidatesElement) return
-    this.candidatesElement.replaceChildren()
-    if (result.candidates.length === 0) {
-      this.candidatesElement.appendChild(
-        textElement(
-          "div",
-          "openlist-danmaku-empty",
-          result.status === "not_found"
-            ? this.text("没有找到匹配", "No matches found")
-            : this.text("没有可选剧集", "No episodes available"),
-        ),
-      )
-      return
-    }
-
-    for (const anime of result.candidates) {
-      const card = document.createElement("section")
-      card.className = "openlist-danmaku-candidate"
-      const heading = document.createElement("div")
-      heading.className = "openlist-danmaku-candidate__heading"
-      heading.appendChild(textElement("strong", "", anime.anime_title))
-      const meta = anime.type_description || anime.type
-      if (meta) {
-        heading.appendChild(textElement("span", "", meta))
-      }
-      card.appendChild(heading)
-
-      const episodes = document.createElement("div")
-      episodes.className = "openlist-danmaku-episodes"
-      for (const episode of anime.episodes) {
-        const button = document.createElement("button")
-        button.type = "button"
-        button.textContent = episode.episode_title
-        if (result.episode_id === episode.episode_id) {
-          button.classList.add("is-current")
-        }
-        button.addEventListener("click", () => {
-          void this.selectEpisode(
-            anime,
-            episode.episode_id,
-            episode.episode_title,
-          )
-        })
-        episodes.appendChild(button)
-      }
-      card.appendChild(episodes)
-      this.candidatesElement.appendChild(card)
-    }
-  }
-
   private async selectEpisode(
     anime: DanmakuAnimeCandidate,
     episodeID: number,
@@ -1055,117 +1081,17 @@ export class DanmakuController {
         episode_id: episodeID,
         episode_title: episodeTitle,
       },
-      this.lastQuery || this.searchInput?.value || "",
+      this.lastQuery || this.searchQuery,
       true,
     )
     if (saved) {
-      this.setPanelOpen(false)
+      this.closeSettings()
     }
   }
 
-  private renderMatch() {
-    if (!this.matchElement) return
-    this.matchElement.replaceChildren()
-    if (!this.currentMatch) {
-      this.matchElement.classList.remove("is-visible")
-      if (this.sourceElement) this.sourceElement.textContent = ""
-      return
-    }
-    this.matchElement.classList.add("is-visible")
-    this.matchElement.textContent = `${this.currentMatch.anime_title} · ${this.currentMatch.episode_title}`
-    if (this.sourceElement) {
-      this.sourceElement.textContent =
-        this.currentSource === "local"
-          ? this.text("本地 XML", "Local XML")
-          : this.text("在线聚合", "Online aggregate")
-    }
-    for (const source of ["local", "online"]) {
-      this.panel
-        ?.querySelector(`[data-action="${source}"]`)
-        ?.setAttribute("aria-pressed", String(this.currentSource === source))
-    }
-  }
-
-  private setStatus(message: string) {
-    if (this.statusElement) this.statusElement.textContent = message
-  }
-
-  private setInputValue(value: string) {
-    if (this.searchInput) this.searchInput.value = value
-  }
-
-  private setPanelOpen(open: boolean, focus = false) {
-    clearTimeout(this.hoverTimer)
-    this.panelOpen = open
-    this.panel?.classList.toggle("is-open", open)
-    if (this.panel) this.panel.hidden = !open
-    for (const [control, tab] of [
-      [this.sourceControl, "source"],
-      [this.settingsControl, "display"],
-    ] as const) {
-      control?.setAttribute(
-        "aria-expanded",
-        String(open && this.panelTab === tab),
-      )
-    }
-    this.player?.template.$player.classList.toggle("openlist-panel-open", open)
-    this.player?.emit("openlist:panel", open)
-    if (open) {
-      if (this.player) {
-        this.player.setting.show = false
-        this.player.controls.show = true
-      }
-      if (!this.searchInput?.value) {
-        this.setInputValue(this.defaultQuery())
-      }
-      if (focus) {
-        const touch =
-          this.player?.template.$player.dataset.openlistInput === "touch"
-        const target =
-          this.panelTab === "source" && !touch
-            ? this.searchInput
-            : this.panel?.querySelector<HTMLElement>("[data-action='close']")
-        target?.focus({ preventScroll: true })
-      }
-    } else if (focus || this.panel?.contains(document.activeElement)) {
-      this.returnFocus?.focus({ preventScroll: true })
-    }
-  }
-
-  private setPanelTab(tab: DanmakuPanelTab) {
-    this.panelTab = tab
-    this.sourceControl?.setAttribute(
-      "aria-expanded",
-      String(this.panelOpen && tab === "source"),
-    )
-    this.settingsControl?.setAttribute(
-      "aria-expanded",
-      String(this.panelOpen && tab === "display"),
-    )
-    this.panel
-      ?.querySelectorAll<HTMLElement>("[data-tab]")
-      .forEach((button) => {
-        button.dataset.active = String(button.dataset.tab === tab)
-        button.setAttribute("aria-selected", String(button.dataset.tab === tab))
-        button.tabIndex = button.dataset.tab === tab ? 0 : -1
-        button.id = `${PANEL_ID}-tab-${button.dataset.tab}`
-        button.setAttribute(
-          "aria-controls",
-          `${PANEL_ID}-${button.dataset.tab}`,
-        )
-      })
-    this.panel
-      ?.querySelectorAll<HTMLElement>("[data-tab-panel]")
-      .forEach((panel) => {
-        panel.dataset.active = String(panel.dataset.tabPanel === tab)
-        panel.id = `${PANEL_ID}-${panel.dataset.tabPanel}`
-        panel.setAttribute("role", "tabpanel")
-        panel.setAttribute(
-          "aria-labelledby",
-          `${PANEL_ID}-tab-${panel.dataset.tabPanel}`,
-        )
-        panel.hidden = panel.dataset.tabPanel !== tab
-      })
+  private setStatus(message: string, refresh = true) {
+    this.statusMessage = message
+    if (refresh) this.refreshSourceMenu()
   }
 
   private defaultQuery() {
@@ -1226,24 +1152,12 @@ function deleteMapping(key: string) {
   return mappings
 }
 
-function textElement(tag: string, className: string, text: string) {
-  const element = document.createElement(tag)
-  if (className) element.className = className
-  element.textContent = text
-  return element
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
-}
-
-function round(value: number, digits: number) {
-  const factor = 10 ** digits
-  return Math.round(value * factor) / factor
 }
 
 function formatNumber(value: number) {

@@ -2,6 +2,7 @@
 
 import * as OpenCC from "opencc-js/t2cn"
 import type Artplayer from "artplayer"
+import type { Setting } from "artplayer"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { DanmakuComment } from "~/types"
 import {
@@ -178,53 +179,6 @@ describe("danmaku data pipeline", () => {
     expect(loadDanmakuConfig()).toEqual(createDefaultDanmakuConfig())
   })
 
-  it("renders quantitative settings as numeric ranges", () => {
-    const playerElement = document.createElement("div")
-    const controller = new DanmakuController({
-      player: () => undefined,
-      getPath: () => "/video.mkv",
-      getPassword: () => "",
-    })
-    const internal = controller as unknown as {
-      player: Artplayer
-      createPanel: () => void
-    }
-    internal.player = {
-      template: { $player: playerElement },
-      on: vi.fn(),
-      off: vi.fn(),
-      emit: vi.fn(),
-      controls: { show: false },
-      setting: { show: false },
-    } as unknown as Artplayer
-    internal.createPanel()
-
-    const settings = Array.from(
-      playerElement.querySelectorAll<HTMLInputElement>(
-        ".openlist-danmaku-range input[type='range']",
-      ),
-      (input) => input.dataset.danmakuSetting,
-    )
-    expect(settings).toEqual([
-      "fontSize",
-      "fontWeight",
-      "lineSpacing",
-      "outline",
-      "opacity",
-      "displayArea",
-      "speed",
-      "spacing",
-    ])
-    expect(
-      playerElement.querySelector<HTMLOutputElement>(
-        "[data-danmaku-output='lineSpacing']",
-      )?.value,
-    ).toBe("3px")
-    expect(playerElement.textContent).not.toContain("标准")
-    expect(playerElement.textContent).not.toContain("粗体")
-    controller.destroy()
-  })
-
   it("maps business modes to danmu.js modes", () => {
     expect(danmakuModeToEngineMode(0)).toBe("scroll")
     expect(danmakuModeToEngineMode(1)).toBe("top")
@@ -394,23 +348,68 @@ describe("danmu.js renderer integration", () => {
   })
 })
 
-describe("danmaku player panels", () => {
+describe("danmaku player settings", () => {
   const cleanup: (() => void)[] = []
   beforeEach(() => {
-    vi.useFakeTimers()
     localStorage.clear()
   })
   afterEach(() => {
     cleanup.splice(0).forEach((dispose) => dispose())
-    vi.useRealTimers()
   })
 
-  function setupPanel() {
+  function setupSettings() {
     const element = document.createElement("div")
     const toolbar = document.createElement("div")
     element.append(toolbar)
     document.body.append(element)
-    const listeners = new Map<string, Set<(...args: any[]) => void>>()
+    const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+    let settings: Setting[] = [
+      {
+        name: "openlist-player-more",
+        html: "更多",
+        selector: [
+          {
+            name: "openlist-player-pip",
+            html: "画中画",
+            onClick: () => "",
+          },
+        ],
+      },
+    ]
+    const find = (name: string) => {
+      let result: Setting | undefined
+      const visit = (items: Setting[]) => {
+        for (const item of items) {
+          if (item.name === name) result = item
+          if (item.selector) visit(item.selector)
+        }
+      }
+      visit(settings)
+      return result
+    }
+    const setting = {
+      show: false,
+      active: settings,
+      add: (item: Setting) => {
+        settings.push(item)
+        return setting
+      },
+      update: (item: Setting) => {
+        const index = settings.findIndex((value) => value.name === item.name)
+        if (index >= 0) settings[index] = item
+        else settings.push(item)
+        return setting
+      },
+      find,
+      remove: (name: string) => {
+        settings = settings.filter((item) => item.name !== name)
+        return setting
+      },
+      render: vi.fn(),
+    } as unknown as Artplayer["setting"] & {
+      active: Setting[]
+      render: ReturnType<typeof vi.fn>
+    }
     const controls = {
       show: false,
       add: (option: {
@@ -436,12 +435,12 @@ describe("danmaku player panels", () => {
     const player = {
       template: { $player: element },
       controls,
-      setting: { show: false },
-      on: (name: string, handler: (...args: any[]) => void) => {
+      setting,
+      on: (name: string, handler: (...args: unknown[]) => void) => {
         if (!listeners.has(name)) listeners.set(name, new Set())
         listeners.get(name)!.add(handler)
       },
-      off: (name: string, handler: (...args: any[]) => void) =>
+      off: (name: string, handler: (...args: unknown[]) => void) =>
         listeners.get(name)?.delete(handler),
       emit: (name: string, ...args: unknown[]) =>
         listeners.get(name)?.forEach((handler) => handler(...args)),
@@ -453,99 +452,82 @@ describe("danmaku player panels", () => {
     })
     const internal = controller as unknown as {
       player: Artplayer
-      addControls: () => void
-      createPanel: () => void
+      addToggleControl: () => void
+      installSettings: () => void
     }
     internal.player = player
-    internal.addControls()
-    internal.createPanel()
+    internal.addToggleControl()
+    internal.installSettings()
     cleanup.push(() => {
       controller.destroy()
       element.remove()
     })
-    const panel = element.querySelector<HTMLElement>(".openlist-danmaku-panel")!
-    return { controller, player, element, panel, controls }
+    return { controller, player, element, controls, setting, find }
   }
 
-  it("groups the toggle and settings with accessible on/off state", () => {
-    const { controls, panel } = setupPanel()
-    expect(panel.hidden).toBe(true)
+  it("keeps only the toggle in the bottom bar and uses the provided icons", () => {
+    const { controls } = setupSettings()
     const toggle = controls["danmaku-toggle"]!
-    expect(toggle.querySelector(".openlist-danmaku-switch")).not.toBeNull()
+    expect(
+      Object.keys(controls).filter((name) => name.startsWith("danmaku-")),
+    ).toEqual(["danmaku-toggle"])
+    expect(toggle.querySelector(".bui-danmaku-switch-on")).not.toBeNull()
     expect(toggle.getAttribute("aria-pressed")).toBe("true")
     toggle.click()
     expect(toggle.getAttribute("aria-pressed")).toBe("false")
     expect(toggle.getAttribute("aria-label")).toBe("开启弹幕")
+    expect(toggle.querySelector(".bui-danmaku-switch-off")).not.toBeNull()
     expect(JSON.parse(localStorage.getItem(DANMAKU_CONFIG_KEY)!).visible).toBe(
       false,
     )
   })
 
-  it("opens touch sources without focusing the search keyboard and closes on outside presses", () => {
-    const { controls, element, panel, player } = setupPanel()
-    element.dataset.openlistInput = "touch"
-    const source = controls["danmaku-search"]!
-    source.click()
-    expect(source.getAttribute("aria-expanded")).toBe("true")
-    expect(panel.hidden).toBe(false)
-    expect(document.activeElement).not.toBe(
-      panel.querySelector("input[type='search']"),
-    )
-    expect(player.controls.show).toBe(true)
-    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }))
-    expect(panel.hidden).toBe(true)
-    expect(source.getAttribute("aria-expanded")).toBe("false")
+  it("places source and display menus under the native More menu", () => {
+    const { find } = setupSettings()
+    const more = find("openlist-player-more")
+
+    expect(more?.selector?.map((item) => item.name)).toEqual([
+      "openlist-player-pip",
+      "openlist-danmaku-source",
+      "openlist-danmaku-display",
+    ])
+    expect(find("openlist-danmaku-source")?.html).toBe("弹幕来源")
+    expect(find("openlist-danmaku-display")?.html).toBe("弹幕设置")
   })
 
-  it("synchronizes tabs and restores trigger focus on Escape", () => {
-    const { controls, panel } = setupPanel()
-    const source = controls["danmaku-search"]!
-    source.click()
-    const display = panel.querySelector<HTMLElement>("[data-tab='display']")!
-    display.click()
-    expect(display.getAttribute("aria-selected")).toBe("true")
-    expect(
-      panel.querySelector<HTMLElement>("[data-tab-panel='source']")?.hidden,
-    ).toBe(true)
-    expect(controls["danmaku-settings"]?.getAttribute("aria-expanded")).toBe(
-      "true",
-    )
-    panel.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-    )
-    expect(panel.hidden).toBe(true)
-    expect(document.activeElement).toBe(source)
-  })
+  it("uses ArtPlayer switch and range items for danmaku display settings", () => {
+    const { find } = setupSettings()
+    const display = find("openlist-danmaku-display")
+    const names = display?.selector?.map((item) => item.name) ?? []
 
-  it("previews display changes and resets controls and persisted settings together", () => {
-    const { controls, panel } = setupPanel()
-    controls["danmaku-settings"]!.click()
-    const size = panel.querySelector<HTMLInputElement>(
-      "[data-danmaku-setting='fontSize']",
-    )!
-    size.value = "32"
-    size.dispatchEvent(new Event("input", { bubbles: true }))
-    expect(
-      panel.querySelector<HTMLOutputElement>("[data-danmaku-output='fontSize']")
-        ?.value,
-    ).toBe("32px")
-    panel.querySelector<HTMLButtonElement>("[data-action='reset']")!.click()
-    expect(size.value).toBe("25")
-    expect(JSON.parse(localStorage.getItem(DANMAKU_CONFIG_KEY)!)).toEqual(
-      createDefaultDanmakuConfig(),
+    expect(names).toContain("openlist-danmaku-visible")
+    expect(names).toContain("openlist-danmaku-fontSize")
+    expect(names).toContain("openlist-danmaku-fontFamily")
+    expect(find("openlist-danmaku-visible")?.switch).toBe(true)
+    expect(find("openlist-danmaku-fontSize")?.range).toEqual([25, 16, 36, 1])
+    expect(find("openlist-danmaku-fontFamily")?.selector?.length).toBe(5)
+
+    const size = find("openlist-danmaku-fontSize")!
+    size.onChange?.call(
+      {} as Artplayer,
+      {
+        ...size,
+        range: [32, 16, 36, 1],
+      } as never,
+      {} as HTMLDivElement,
+      new Event("input"),
+    )
+    expect(JSON.parse(localStorage.getItem(DANMAKU_CONFIG_KEY)!).fontSize).toBe(
+      32,
     )
   })
 
-  it("cancels delayed hover opening and removes its shared panel listener on destroy", () => {
-    const { controller, controls, element, player } = setupPanel()
-    const event = new Event("pointerenter")
-    Object.defineProperty(event, "pointerType", { value: "mouse" })
-    controls["danmaku-settings"]!.dispatchEvent(event)
+  it("removes its menus and toggle when destroyed", () => {
+    const { controller, controls, find } = setupSettings()
     controller.destroy()
-    vi.advanceTimersByTime(500)
-    player.emit("openlist:close-panels")
-    expect(element.querySelector(".openlist-danmaku-panel")).toBeNull()
-    expect(vi.getTimerCount()).toBe(0)
+    expect(controls["danmaku-toggle"]).toBeUndefined()
+    expect(find("openlist-danmaku-source")).toBeUndefined()
+    expect(find("openlist-danmaku-display")).toBeUndefined()
   })
 })
 
