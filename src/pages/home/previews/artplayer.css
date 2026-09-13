@@ -1,18 +1,310 @@
-/* Some custom styles for ArtPlayer */
+.art-video-player.openlist-interactive {
+  container: openlist-player / inline-size;
+  --art-widget-background: rgb(20 20 20 / 94%);
+  --art-border-radius: 6px;
+  --art-settings-max-height: min(400px, calc(100% - 80px));
+  letter-spacing: 0;
+}
 
-/* Hide previous and next buttons on small screens */
-@media (max-width: 440px) {
-  .art-video-player .art-controls .art-control-previous-button,
-  .art-video-player .art-controls .art-control-next-button,
-  .art-video-player .art-controls .art-control-screenshot,
-  .art-video-player .art-controls .art-control-time {
+.openlist-player-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  vertical-align: middle;
+}
+
+.art-video-player.openlist-interactive:focus-visible,
+.art-video-player.openlist-interactive
+  :is(button, input, [role="button"]):focus-visible {
+  outline: 2px solid var(--art-theme);
+  outline-offset: -2px;
+}
+
+.art-video-player .openlist-styled-subtitle {
+  max-height: 85%;
+  overflow: hidden;
+}
+
+.art-video-player .openlist-styled-subtitle .art-subtitle-line {
+  max-width: 100%;
+  padding: 0.08em 0.3em;
+  border-radius: 3px;
+  background: var(--openlist-subtitle-background, transparent);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-shadow: none;
+}
+
+.art-video-player .openlist-subtitle-text {
+  color: var(--openlist-subtitle-color, white);
+  opacity: var(--openlist-subtitle-opacity, 1);
+  text-shadow: var(--openlist-subtitle-shadow, none);
+}
+
+.openlist-subtitle-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.openlist-color-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(255 255 255 / 40%);
+  border-radius: 3px;
+}
+
+.art-video-player.openlist-interactive .art-settings {
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 72px);
+  border: 1px solid rgb(255 255 255 / 12%);
+}
+
+.art-video-player.openlist-interactive .art-setting-panel {
+  width: 100%;
+}
+
+.art-video-player.openlist-interactive .art-setting-item {
+  max-width: 100%;
+}
+
+.art-video-player.openlist-interactive .art-setting-item-left {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.art-video-player.openlist-interactive .art-setting-item-left-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.art-video-player.openlist-interactive .art-setting-item-right {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.art-video-player.openlist-interactive .art-setting-range {
+  max-width: 90px;
+}
+
+.art-video-player[data-openlist-input="touch"]
+  .art-settings
+  .art-setting-range {
+  height: 24px;
+  background: linear-gradient(
+    to bottom,
+    transparent 10px,
+    rgb(255 255 255 / 20%) 10px,
+    rgb(255 255 255 / 20%) 14px,
+    transparent 14px
+  );
+}
+
+/* A selector's hover opens its menu, so its tooltip must never cover the menu. */
+.art-video-player .art-control-selector::before,
+.art-video-player .art-control-selector::after,
+.art-video-player .art-control[aria-expanded="true"]::before,
+.art-video-player .art-control[aria-expanded="true"]::after {
+  display: none !important;
+}
+
+.art-video-player
+  .art-control-selector.openlist-selector-open
+  .art-selector-list {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.art-video-player.openlist-interactive .art-selector-list {
+  max-width: min(300px, var(--openlist-menu-width, 300px));
+  max-height: var(--openlist-menu-height, 180px);
+}
+
+.art-video-player.openlist-interactive .art-selector-item {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.art-video-player.openlist-interactive .art-video {
+  touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
+}
+
+.art-video-player.openlist-interactive:is(.art-fullscreen, .art-fullscreen-web)
+  .art-video,
+.art-video-player.openlist-interactive .art-control-progress,
+.art-video-player.openlist-interactive input[type="range"] {
+  touch-action: none;
+}
+
+.art-video-player.openlist-interactive.art-fullscreen-web:not(
+    .art-auto-orientation
+  ) {
+  width: 100%;
+  height: 100dvh;
+}
+
+.openlist-gesture-hud {
+  position: absolute;
+  z-index: 80;
+  top: 38%;
+  left: 50%;
+  display: grid;
+  min-width: 110px;
+  max-width: calc(100% - 32px);
+  justify-items: center;
+  gap: 5px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: var(--art-widget-background);
+  color: #fff;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.openlist-gesture-hud strong {
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.openlist-gesture-hud > span:last-child:empty {
+  display: none;
+}
+
+.openlist-gesture-hud[hidden],
+.openlist-seek-preview[hidden] {
+  display: none;
+}
+
+.openlist-seek-preview {
+  position: absolute;
+  z-index: 45;
+  top: 50%;
+  left: 0;
+  height: var(--art-progress-height);
+  background: var(--art-theme);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 65%);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.art-video-player.openlist-interactive[data-openlist-input="touch"] {
+  --art-control-height: 44px;
+  --art-control-icon-size: 36px;
+  --art-bottom-gap: 0px;
+}
+
+.art-video-player[data-openlist-input="touch"] .art-controls .art-control {
+  min-width: 40px;
+  min-height: 44px;
+}
+
+.art-video-player[data-openlist-input="touch"] .art-control-progress {
+  min-height: 26px;
+}
+
+.art-video-player[data-openlist-input="touch"] .art-controls .art-control-time {
+  position: absolute;
+  bottom: 58px;
+  left: 0;
+  display: flex;
+  min-height: 20px;
+  padding: 0;
+  font-size: 12px;
+}
+
+.art-video-player[data-openlist-input="touch"]
+  .art-controls
+  :is(
+    .art-control-previous-button,
+    .art-control-next-button,
+    .art-control-screenshot,
+    .art-control-fullscreenWeb,
+    .art-control-pip,
+    .art-control-airplay,
+    .art-control-volume
+  ) {
+  display: none;
+}
+
+.art-video-player[data-openlist-input="touch"] [class*="hint--"]::before,
+.art-video-player[data-openlist-input="touch"] [class*="hint--"]::after {
+  display: none !important;
+}
+
+.art-video-player[data-openlist-input="touch"]
+  .art-control-selector:not(.openlist-selector-open)
+  .art-selector-list {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.art-video-player[data-openlist-input="touch"] .art-selector-item {
+  min-height: 44px;
+}
+
+.art-video-player[data-openlist-input="touch"] .art-settings {
+  right: 8px !important;
+  left: auto !important;
+  bottom: 64px;
+}
+
+.art-video-player:is(.art-fullscreen, .art-fullscreen-web) .art-bottom {
+  padding-right: max(10px, env(safe-area-inset-right));
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@container openlist-player (max-width: 600px) {
+  .art-video-player.openlist-interactive
+    .art-controls
+    :is(
+      .art-control-previous-button,
+      .art-control-next-button,
+      .art-control-screenshot,
+      .art-control-airplay,
+      .art-control-pip,
+      .art-control-fullscreenWeb
+    ) {
     display: none;
+  }
+
+  .art-video-player.openlist-interactive .art-controls .art-control-time {
+    position: absolute;
+    bottom: calc(var(--art-control-height) + 14px);
+    left: 0;
+    min-height: 20px;
+    padding: 0;
+    font-size: 12px;
   }
 }
 
-/* Hide time on small screens */
-@media (max-width: 600px) {
-  .art-video-player .art-controls .art-control-time {
+@container openlist-player (max-width: 400px) {
+  .art-video-player.openlist-interactive .art-controls .art-control-volume {
     display: none;
+  }
+
+  .art-video-player[data-openlist-input="touch"] .art-controls .art-control {
+    min-width: 34px;
+  }
+
+  .art-video-player.openlist-interactive .art-control-emby-quality {
+    min-width: 52px;
+    padding: 0 5px;
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art-video-player.openlist-interactive * {
+    transition-duration: 0s !important;
   }
 }

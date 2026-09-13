@@ -191,6 +191,11 @@ describe("danmaku data pipeline", () => {
     }
     internal.player = {
       template: { $player: playerElement },
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
+      controls: { show: false },
+      setting: { show: false },
     } as unknown as Artplayer
     internal.createPanel()
 
@@ -217,6 +222,7 @@ describe("danmaku data pipeline", () => {
     ).toBe("3px")
     expect(playerElement.textContent).not.toContain("标准")
     expect(playerElement.textContent).not.toContain("粗体")
+    controller.destroy()
   })
 
   it("maps business modes to danmu.js modes", () => {
@@ -385,6 +391,161 @@ describe("danmu.js renderer integration", () => {
     expect(displayComments).toHaveLength(comments.length)
     expect(displayComments[0].text).toBe("漢語 0")
     renderer.destroy()
+  })
+})
+
+describe("danmaku player panels", () => {
+  const cleanup: (() => void)[] = []
+  beforeEach(() => {
+    vi.useFakeTimers()
+    localStorage.clear()
+  })
+  afterEach(() => {
+    cleanup.splice(0).forEach((dispose) => dispose())
+    vi.useRealTimers()
+  })
+
+  function setupPanel() {
+    const element = document.createElement("div")
+    const toolbar = document.createElement("div")
+    element.append(toolbar)
+    document.body.append(element)
+    const listeners = new Map<string, Set<(...args: any[]) => void>>()
+    const controls = {
+      show: false,
+      add: (option: {
+        name: string
+        html: string | HTMLElement
+        click: () => void
+      }) => {
+        const control = document.createElement("div")
+        control.className = `art-control art-control-${option.name}`
+        control.tabIndex = 0
+        if (typeof option.html === "string") control.innerHTML = option.html
+        else control.append(option.html)
+        control.addEventListener("click", option.click)
+        toolbar.append(control)
+        controls[option.name] = control
+        return control
+      },
+      remove: (name: string) => {
+        controls[name]?.remove()
+        delete controls[name]
+      },
+    } as unknown as Artplayer["controls"]
+    const player = {
+      template: { $player: element },
+      controls,
+      setting: { show: false },
+      on: (name: string, handler: (...args: any[]) => void) => {
+        if (!listeners.has(name)) listeners.set(name, new Set())
+        listeners.get(name)!.add(handler)
+      },
+      off: (name: string, handler: (...args: any[]) => void) =>
+        listeners.get(name)?.delete(handler),
+      emit: (name: string, ...args: unknown[]) =>
+        listeners.get(name)?.forEach((handler) => handler(...args)),
+    } as unknown as Artplayer
+    const controller = new DanmakuController({
+      player: () => player,
+      getPath: () => "/test.mkv",
+      getPassword: () => "",
+    })
+    const internal = controller as unknown as {
+      player: Artplayer
+      addControls: () => void
+      createPanel: () => void
+    }
+    internal.player = player
+    internal.addControls()
+    internal.createPanel()
+    cleanup.push(() => {
+      controller.destroy()
+      element.remove()
+    })
+    const panel = element.querySelector<HTMLElement>(".openlist-danmaku-panel")!
+    return { controller, player, element, panel, controls }
+  }
+
+  it("groups the toggle and settings with accessible on/off state", () => {
+    const { controls, panel } = setupPanel()
+    expect(panel.hidden).toBe(true)
+    const toggle = controls["danmaku-toggle"]!
+    expect(toggle.querySelector(".openlist-danmaku-switch")).not.toBeNull()
+    expect(toggle.getAttribute("aria-pressed")).toBe("true")
+    toggle.click()
+    expect(toggle.getAttribute("aria-pressed")).toBe("false")
+    expect(toggle.getAttribute("aria-label")).toBe("开启弹幕")
+    expect(JSON.parse(localStorage.getItem(DANMAKU_CONFIG_KEY)!).visible).toBe(
+      false,
+    )
+  })
+
+  it("opens touch sources without focusing the search keyboard and closes on outside presses", () => {
+    const { controls, element, panel, player } = setupPanel()
+    element.dataset.openlistInput = "touch"
+    const source = controls["danmaku-search"]!
+    source.click()
+    expect(source.getAttribute("aria-expanded")).toBe("true")
+    expect(panel.hidden).toBe(false)
+    expect(document.activeElement).not.toBe(
+      panel.querySelector("input[type='search']"),
+    )
+    expect(player.controls.show).toBe(true)
+    document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }))
+    expect(panel.hidden).toBe(true)
+    expect(source.getAttribute("aria-expanded")).toBe("false")
+  })
+
+  it("synchronizes tabs and restores trigger focus on Escape", () => {
+    const { controls, panel } = setupPanel()
+    const source = controls["danmaku-search"]!
+    source.click()
+    const display = panel.querySelector<HTMLElement>("[data-tab='display']")!
+    display.click()
+    expect(display.getAttribute("aria-selected")).toBe("true")
+    expect(
+      panel.querySelector<HTMLElement>("[data-tab-panel='source']")?.hidden,
+    ).toBe(true)
+    expect(controls["danmaku-settings"]?.getAttribute("aria-expanded")).toBe(
+      "true",
+    )
+    panel.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    )
+    expect(panel.hidden).toBe(true)
+    expect(document.activeElement).toBe(source)
+  })
+
+  it("previews display changes and resets controls and persisted settings together", () => {
+    const { controls, panel } = setupPanel()
+    controls["danmaku-settings"]!.click()
+    const size = panel.querySelector<HTMLInputElement>(
+      "[data-danmaku-setting='fontSize']",
+    )!
+    size.value = "32"
+    size.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(
+      panel.querySelector<HTMLOutputElement>("[data-danmaku-output='fontSize']")
+        ?.value,
+    ).toBe("32px")
+    panel.querySelector<HTMLButtonElement>("[data-action='reset']")!.click()
+    expect(size.value).toBe("25")
+    expect(JSON.parse(localStorage.getItem(DANMAKU_CONFIG_KEY)!)).toEqual(
+      createDefaultDanmakuConfig(),
+    )
+  })
+
+  it("cancels delayed hover opening and removes its shared panel listener on destroy", () => {
+    const { controller, controls, element, player } = setupPanel()
+    const event = new Event("pointerenter")
+    Object.defineProperty(event, "pointerType", { value: "mouse" })
+    controls["danmaku-settings"]!.dispatchEvent(event)
+    controller.destroy()
+    vi.advanceTimersByTime(500)
+    player.emit("openlist:close-panels")
+    expect(element.querySelector(".openlist-danmaku-panel")).toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 

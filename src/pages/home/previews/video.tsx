@@ -31,6 +31,7 @@ import { useNavigate } from "@solidjs/router"
 import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
 import { SubtitleStylePlugin } from "./subtitle-style"
+import { PlayerInteractionsPlugin } from "./player-interactions"
 import { createEmbyPlayback } from "./emby-playback"
 import "./artplayer.css"
 import "./playback.css"
@@ -115,7 +116,7 @@ const Preview = () => {
     ],
     quality: [],
     // highlight: [],
-    plugins: [AutoHeightPlugin, SubtitleStylePlugin],
+    plugins: [AutoHeightPlugin, SubtitleStylePlugin, PlayerInteractionsPlugin],
     whitelist: [],
     settings: [],
     // subtitle:{}
@@ -164,7 +165,8 @@ const Preview = () => {
       ? (currentLang().toLowerCase() as string)
       : "en",
     lock: true,
-    fastForward: true,
+    gesture: false,
+    fastForward: false,
     autoPlayback: true,
     autoOrientation: true,
     airplay: true,

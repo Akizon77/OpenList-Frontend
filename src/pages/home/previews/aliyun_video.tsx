@@ -24,6 +24,7 @@ import { TiWarning } from "solid-icons/ti"
 import { DanmakuController } from "./danmaku"
 import { sortSubtitlesByLanguage } from "./subtitle"
 import { SubtitleStylePlugin } from "./subtitle-style"
+import { PlayerInteractionsPlugin } from "./player-interactions"
 import "./artplayer.css"
 import "./playback.css"
 
@@ -127,7 +128,7 @@ const Preview = () => {
     playsInline: true,
     theme: getMainColor(),
     quality: [],
-    plugins: [AutoHeightPlugin, SubtitleStylePlugin],
+    plugins: [AutoHeightPlugin, SubtitleStylePlugin, PlayerInteractionsPlugin],
     whitelist: [],
     screenshot: true,
     settings: [],
@@ -152,7 +153,8 @@ const Preview = () => {
       ? (currentLang().toLowerCase() as any)
       : "en",
     lock: true,
-    fastForward: true,
+    gesture: false,
+    fastForward: false,
     autoPlayback: true,
     autoOrientation: true,
     airplay: true,
@@ -317,6 +319,10 @@ const Preview = () => {
         }
       })
       player = new Artplayer(option)
+      const onFullscreen = () =>
+        setShouldKeepState(player.fullscreen || player.fullscreenWeb)
+      player.on("fullscreen", onFullscreen)
+      player.on("fullscreenWeb", onFullscreen)
       danmakuController = new DanmakuController({
         player: () => player,
         getPath: () => pathname(),

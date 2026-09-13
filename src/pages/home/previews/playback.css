@@ -11,7 +11,7 @@
   .art-control-emby-quality.art-control-selector
   .art-selector-list {
   min-width: 150px;
-  max-height: min(58vh, 420px);
+  max-height: min(var(--openlist-menu-height, 180px), 420px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -105,45 +105,47 @@
 .openlist-danmaku-panel {
   position: absolute;
   z-index: 160;
-  top: 12px;
-  right: 12px;
-  bottom: 56px;
+  right: 10px;
+  bottom: calc(var(--art-control-height) + 16px);
   display: flex;
-  width: min(420px, calc(100% - 24px));
+  width: min(360px, calc(100% - 20px));
+  height: min(410px, calc(100% - var(--art-control-height) - 28px));
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 8px;
-  background: rgb(17 20 24 / 96%);
-  box-shadow: 0 18px 48px rgb(0 0 0 / 42%);
-  color: #f5f7fa;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(calc(100% + 24px));
-  transition:
-    opacity 160ms ease,
-    transform 200ms ease;
+  border-radius: var(--art-border-radius);
+  background: var(--art-widget-background);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+  color: var(--art-font-color);
+  font-family: inherit;
+  text-shadow: none;
 }
 
-.openlist-danmaku-panel.is-open {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0);
+.openlist-danmaku-panel[hidden],
+.openlist-danmaku-tab-panel[hidden] {
+  display: none !important;
+}
+
+.art-video-player.art-backdrop .openlist-danmaku-panel {
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  background: rgb(0 0 0 / 75%);
 }
 
 .openlist-danmaku-panel__header {
   display: flex;
-  align-items: flex-start;
+  flex: 0 0 auto;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 14px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgb(255 255 255 / 10%);
 }
 
 .openlist-danmaku-panel__header strong {
   display: block;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.25;
 }
 
@@ -155,7 +157,7 @@
   place-items: center;
   border: 0;
   border-radius: 6px;
-  background: rgb(255 255 255 / 8%);
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font-size: 22px;
@@ -167,7 +169,10 @@
 }
 
 .openlist-danmaku-source {
-  min-height: 17px;
+  max-width: 270px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin-top: 3px;
   color: rgb(255 255 255 / 56%);
   font-size: 11px;
@@ -175,6 +180,7 @@
 }
 
 .openlist-danmaku-actions {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -184,8 +190,8 @@
 .openlist-danmaku-actions button,
 .openlist-danmaku-episodes button {
   border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 6px;
-  background: rgb(255 255 255 / 6%);
+  border-radius: 3px;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -197,6 +203,11 @@
   font-size: 12px;
 }
 
+.openlist-danmaku-actions button[aria-pressed="true"] {
+  border-color: var(--art-theme);
+  color: var(--art-theme);
+}
+
 .openlist-danmaku-actions button:hover,
 .openlist-danmaku-episodes button:hover {
   border-color: var(--art-theme, #1890ff);
@@ -204,6 +215,7 @@
 }
 
 .openlist-danmaku-search {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   gap: 6px;
@@ -220,7 +232,7 @@
   background: rgb(0 0 0 / 24%);
   color: #fff;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .openlist-danmaku-search input:focus {
@@ -248,6 +260,8 @@
 
 .openlist-danmaku-status,
 .openlist-danmaku-match {
+  overflow-wrap: anywhere;
+  flex: 0 0 auto;
   margin: 0 14px 8px;
   border-radius: 6px;
   font-size: 12px;
@@ -256,15 +270,19 @@
 
 .openlist-danmaku-status {
   padding: 8px 10px;
-  background: rgb(255 255 255 / 6%);
   color: rgb(255 255 255 / 72%);
+}
+
+.openlist-danmaku-status:empty,
+.openlist-danmaku-source:empty {
+  display: none;
 }
 
 .openlist-danmaku-match {
   display: none;
   padding: 8px 10px;
   border-left: 3px solid var(--art-theme, #1890ff);
-  background: rgb(24 144 255 / 14%);
+  background: rgb(255 255 255 / 5%);
   color: #fff;
 }
 
@@ -274,8 +292,7 @@
 
 .openlist-danmaku-candidates {
   min-height: 0;
-  flex: 1;
-  overflow: auto;
+  flex: 0 0 auto;
   padding: 0 14px 14px;
   overscroll-behavior: contain;
 }
@@ -283,9 +300,7 @@
 .openlist-danmaku-candidate {
   overflow: hidden;
   margin-top: 8px;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 5%);
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
 }
 
 .openlist-danmaku-candidate__heading {
@@ -329,7 +344,7 @@
 
 .openlist-danmaku-episodes button.is-current {
   border-color: var(--art-theme, #1890ff);
-  background: rgb(24 144 255 / 16%);
+  background: rgb(255 255 255 / 8%);
 }
 
 .openlist-danmaku-empty {
@@ -341,9 +356,8 @@
 
 @media (max-width: 600px) {
   .openlist-danmaku-panel {
-    top: 8px;
     right: 8px;
-    bottom: 48px;
+    bottom: 60px;
     width: calc(100% - 16px);
   }
 
@@ -381,6 +395,45 @@
 
 .art-video-player .art-control-danmaku-toggle.is-active {
   color: var(--art-theme);
+}
+
+.art-video-player .art-control-danmaku-toggle {
+  gap: 4px;
+  width: 54px;
+  padding: 0 4px;
+  opacity: 1;
+}
+
+.art-video-player .art-control-danmaku-settings,
+.art-video-player .art-control-danmaku-search {
+  width: 34px;
+  padding: 0 4px;
+}
+
+.openlist-danmaku-switch {
+  width: 18px;
+  height: 10px;
+  flex: 0 0 auto;
+  padding: 2px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 35%);
+}
+
+.openlist-danmaku-switch::after {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+  content: "";
+}
+
+.is-active > .openlist-danmaku-switch {
+  background: var(--art-theme);
+}
+
+.is-active > .openlist-danmaku-switch::after {
+  transform: translateX(8px);
 }
 
 .openlist-danmaku-heatmap {
@@ -437,6 +490,11 @@
   flex: 1;
 }
 
+.openlist-danmaku-tab-panel[data-tab-panel="source"] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .openlist-danmaku-tab-panel[data-active="true"] {
   display: flex !important;
   flex-direction: column;
@@ -490,9 +548,8 @@
   align-items: center;
   gap: 7px;
   padding: 6px 8px;
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 6px;
-  background: rgb(255 255 255 / 4%);
+  border: 1px solid transparent;
+  border-radius: 3px;
   cursor: pointer;
   font-size: 12px;
 }
@@ -500,6 +557,10 @@
 .openlist-danmaku-checks label:hover {
   border-color: rgb(255 255 255 / 20%);
   background: rgb(255 255 255 / 7%);
+}
+
+.openlist-danmaku-checks label:has(input:checked) {
+  color: var(--art-theme);
 }
 
 .openlist-danmaku-checks input {
@@ -528,6 +589,8 @@
   min-width: 0;
   margin: 0;
   accent-color: var(--art-theme, #1890ff);
+  height: 24px;
+  cursor: pointer;
 }
 
 .openlist-danmaku-range output {
@@ -556,8 +619,8 @@
   min-height: 30px;
   padding: 4px;
   border: 1px solid rgb(255 255 255 / 11%);
-  border-radius: 5px;
-  background: rgb(255 255 255 / 4%);
+  border-radius: 3px;
+  background: transparent;
   color: rgb(255 255 255 / 64%);
   cursor: pointer;
   font: inherit;
@@ -576,14 +639,45 @@
   color: #fff;
 }
 
+.openlist-danmaku-reset {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: rgb(255 255 255 / 70%);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.openlist-danmaku-reset:hover {
+  color: var(--art-theme);
+}
+
+.art-video-player[data-openlist-input="touch"] .openlist-danmaku-panel {
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  width: min(380px, calc(100% - 16px));
+}
+
+.art-video-player[data-openlist-input="touch"] .openlist-danmaku-panel button,
+.art-video-player[data-openlist-input="touch"] .openlist-danmaku-checks label {
+  min-height: 40px;
+}
+
+.art-video-player[data-openlist-input="touch"] .openlist-danmaku-range input {
+  height: 32px;
+}
+
+.art-video-player[data-openlist-input="touch"]
+  .openlist-danmaku-panel__header
+  button {
+  width: 40px;
+}
+
 @media (max-width: 600px) {
   .openlist-danmaku-tabs,
   .openlist-danmaku-settings {
     padding-right: 12px;
     padding-left: 12px;
-  }
-
-  .openlist-danmaku-checks {
-    grid-template-columns: 1fr;
   }
 }

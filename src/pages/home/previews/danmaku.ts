@@ -21,13 +21,10 @@ import {
 } from "./danmaku-config"
 import { normalizeComments, parseBilibiliXml } from "./danmaku-data"
 import { DanmuJsRenderer } from "./danmaku-renderer"
+import { playerIcon } from "./player-icons"
 
 const MAPPINGS_KEY = "openlist_danmaku_mappings_v1"
 const PANEL_ID = "openlist-danmaku-panel"
-
-const SEARCH_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.2-3.2"></path></svg>`
-const SETTINGS_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"></path><path d="M18 7h2"></path><circle cx="16" cy="7" r="2"></circle><path d="M4 17h2"></path><path d="M10 17h10"></path><circle cx="8" cy="17" r="2"></circle></svg>`
-const DANMAKU_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 9h8"></path><path d="M8 13h5"></path></svg>`
 
 type DanmakuSource = "none" | "local" | "online"
 type DanmakuPanelTab = "source" | "display"
@@ -55,6 +52,11 @@ export class DanmakuController {
   private candidatesElement?: HTMLDivElement
   private sourceElement?: HTMLDivElement
   private toggleControl?: HTMLElement
+  private sourceControl?: HTMLElement
+  private settingsControl?: HTMLElement
+  private returnFocus?: HTMLElement
+  private hoverTimer?: ReturnType<typeof setTimeout>
+  private readonly cleanup: (() => void)[] = []
   private abortController?: AbortController
   private generation = 0
   private activeKey = ""
@@ -109,9 +111,9 @@ export class DanmakuController {
     void this.restorePriority(requestGeneration, key)
   }
 
-  openPanel(tab: DanmakuPanelTab = "source") {
+  openPanel(tab: DanmakuPanelTab = "source", focus = false) {
     this.setPanelTab(tab)
-    this.setPanelOpen(true)
+    this.setPanelOpen(true, focus)
   }
 
   destroy() {
@@ -119,6 +121,9 @@ export class DanmakuController {
     this.destroyed = true
     this.generation += 1
     this.abortController?.abort()
+    clearTimeout(this.hoverTimer)
+    this.setPanelOpen(false)
+    this.cleanup.forEach((remove) => remove())
     this.panel?.remove()
 
     if (this.player) {
@@ -396,33 +401,33 @@ export class DanmakuController {
     if (!player) return
 
     if (!player.controls["danmaku-search"]) {
-      player.controls.add({
+      this.sourceControl = player.controls.add({
         name: "danmaku-search",
-        index: 12,
+        index: 14,
         position: "right",
-        html: SEARCH_ICON,
-        tooltip: this.text("弹幕搜索", "Danmaku search"),
-        click: () => this.openPanel("source"),
+        html: playerIcon("source"),
+        tooltip: this.text("弹幕来源", "Danmaku source"),
+        click: () => this.togglePanel("source", this.sourceControl),
       })
     }
 
     if (!player.controls["danmaku-settings"]) {
-      player.controls.add({
+      this.settingsControl = player.controls.add({
         name: "danmaku-settings",
         index: 13,
         position: "right",
-        html: SETTINGS_ICON,
+        html: playerIcon("settings"),
         tooltip: this.text("弹幕设置", "Danmaku settings"),
-        click: () => this.openPanel("display"),
+        click: () => this.togglePanel("display", this.settingsControl),
       })
     }
 
     if (!player.controls["danmaku-toggle"]) {
       this.toggleControl = player.controls.add({
         name: "danmaku-toggle",
-        index: 14,
+        index: 12,
         position: "right",
-        html: DANMAKU_ICON,
+        html: `${playerIcon("danmaku").outerHTML}<span class="openlist-danmaku-switch" aria-hidden="true"></span>`,
         tooltip: this.text("弹幕开关", "Toggle danmaku"),
         click: () => {
           const next = {
@@ -434,7 +439,56 @@ export class DanmakuController {
         },
       })
     }
+    for (const control of [this.sourceControl, this.settingsControl]) {
+      control?.setAttribute("aria-haspopup", "dialog")
+      control?.setAttribute("aria-controls", PANEL_ID)
+      control?.setAttribute("aria-expanded", "false")
+    }
+    this.sourceControl?.setAttribute(
+      "aria-label",
+      this.text("弹幕来源", "Danmaku source"),
+    )
+    this.settingsControl?.setAttribute(
+      "aria-label",
+      this.text("弹幕设置", "Danmaku settings"),
+    )
+    if (this.settingsControl) {
+      this.listen(this.settingsControl, "pointerenter", (event) => {
+        if ((event as PointerEvent).pointerType !== "mouse") return
+        clearTimeout(this.hoverTimer)
+        this.hoverTimer = setTimeout(() => this.openPanel("display"), 180)
+      })
+      this.listen(this.settingsControl, "pointerleave", (event) => {
+        if ((event as PointerEvent).pointerType === "mouse")
+          this.schedulePanelClose()
+      })
+    }
     this.syncToggleControl()
+  }
+
+  private listen(target: EventTarget, name: string, handler: EventListener) {
+    target.addEventListener(name, handler)
+    this.cleanup.push(() => target.removeEventListener(name, handler))
+  }
+
+  private togglePanel(tab: DanmakuPanelTab, trigger?: HTMLElement) {
+    clearTimeout(this.hoverTimer)
+    if (this.panelOpen && this.panelTab === tab) {
+      this.setPanelOpen(false)
+    } else {
+      this.returnFocus = trigger
+      this.openPanel(tab, true)
+    }
+  }
+
+  private schedulePanelClose() {
+    clearTimeout(this.hoverTimer)
+    if (
+      this.panelTab === "display" &&
+      !this.panel?.contains(document.activeElement)
+    ) {
+      this.hoverTimer = setTimeout(() => this.setPanelOpen(false), 250)
+    }
   }
 
   private createPanel() {
@@ -444,6 +498,7 @@ export class DanmakuController {
     const panel = document.createElement("div")
     panel.id = PANEL_ID
     panel.className = "openlist-danmaku-panel"
+    panel.hidden = true
     panel.setAttribute("role", "dialog")
     panel.setAttribute("aria-label", this.text("弹幕", "Danmaku"))
     panel.innerHTML = `
@@ -452,21 +507,21 @@ export class DanmakuController {
           <strong>${this.text("弹幕", "Danmaku")}</strong>
           <div class="openlist-danmaku-source"></div>
         </div>
-        <button type="button" data-action="close" aria-label="${this.text("关闭", "Close")}">×</button>
+        <button type="button" data-action="close" aria-label="${this.text("关闭", "Close")}">${playerIcon("close").outerHTML}</button>
       </div>
       <div class="openlist-danmaku-tabs" role="tablist">
-        <button type="button" role="tab" data-tab="source" data-active="true">${this.text("来源", "Source")}</button>
-        <button type="button" role="tab" data-tab="display" data-active="false">${this.text("显示", "Display")}</button>
+        <button type="button" role="tab" data-tab="display" data-active="false">${this.text("弹幕设置", "Settings")}</button>
+        <button type="button" role="tab" data-tab="source" data-active="true">${this.text("弹幕来源", "Source")}</button>
       </div>
       <div class="openlist-danmaku-tab-panel" data-tab-panel="source">
         <div class="openlist-danmaku-actions">
-          <button type="button" data-action="local">${this.text("恢复本地 XML", "Restore local XML")}</button>
+          <button type="button" data-action="local">${this.text("本地 XML", "Local XML")}</button>
           <button type="button" data-action="online">${this.text("在线聚合", "Online")}</button>
           <button type="button" data-action="clear">${this.text("清除匹配", "Clear match")}</button>
         </div>
         <form class="openlist-danmaku-search">
-          <input type="search" maxlength="256" autocomplete="off" placeholder="${this.text("剧名 S01E01", "Title S01E01")}" />
-          <button type="submit">${SEARCH_ICON}</button>
+          <input type="search" aria-label="${this.text("搜索弹幕来源", "Search danmaku sources")}" maxlength="256" autocomplete="off" placeholder="${this.text("剧名 S01E01", "Title S01E01")}" />
+          <button type="submit" aria-label="${this.text("搜索", "Search")}">${playerIcon("search").outerHTML}</button>
         </form>
         <div class="openlist-danmaku-status" role="status"></div>
         <div class="openlist-danmaku-match"></div>
@@ -544,6 +599,7 @@ export class DanmakuController {
               <label><input type="checkbox" data-danmaku-setting="traditionalToSimplified" /><span>${this.text("繁体转简体", "Traditional to Simplified")}</span></label>
             </div>
           </section>
+          <button class="openlist-danmaku-reset" type="button" data-action="reset">${this.text("恢复默认", "Reset to default")}</button>
         </div>
       </div>
     `
@@ -558,6 +614,42 @@ export class DanmakuController {
       panel.querySelector(".openlist-danmaku-candidates") ?? undefined
     this.sourceElement =
       panel.querySelector(".openlist-danmaku-source") ?? undefined
+    this.listen(panel, "pointerenter", () => clearTimeout(this.hoverTimer))
+    this.listen(panel, "pointerleave", (event) => {
+      if ((event as PointerEvent).pointerType === "mouse")
+        this.schedulePanelClose()
+    })
+    this.listen(document, "pointerdown", (event) => {
+      const target = event.target as Node
+      if (
+        this.panelOpen &&
+        !panel.contains(target) &&
+        !this.sourceControl?.contains(target) &&
+        !this.settingsControl?.contains(target)
+      ) {
+        this.setPanelOpen(false)
+      }
+    })
+    this.listen(panel, "keydown", (event) => {
+      const key = event as KeyboardEvent
+      if (key.key === "Escape") {
+        key.preventDefault()
+        key.stopPropagation()
+        this.setPanelOpen(false, true)
+      } else if (
+        ["ArrowLeft", "ArrowRight"].includes(key.key) &&
+        (key.target as HTMLElement).matches("[role='tab']")
+      ) {
+        key.preventDefault()
+        this.setPanelTab(this.panelTab === "source" ? "display" : "source")
+        panel
+          .querySelector<HTMLElement>(`[data-tab="${this.panelTab}"]`)
+          ?.focus()
+      }
+    })
+    const close = () => this.setPanelOpen(false)
+    player.on("openlist:close-panels", close)
+    this.cleanup.push(() => player.off("openlist:close-panels", close))
 
     panel.addEventListener("pointerdown", (event) => event.stopPropagation())
     panel.addEventListener("mousedown", (event) => event.stopPropagation())
@@ -592,8 +684,13 @@ export class DanmakuController {
     panel
       .querySelector("[data-action='close']")
       ?.addEventListener("click", () => {
-        this.setPanelOpen(false)
+        this.setPanelOpen(false, true)
       })
+    panel
+      .querySelector("[data-action='reset']")
+      ?.addEventListener("click", () =>
+        this.applyConfig(createDefaultDanmakuConfig()),
+      )
     panel
       .querySelector("[data-action='local']")
       ?.addEventListener("click", () => {
@@ -617,6 +714,7 @@ export class DanmakuController {
     })
 
     this.syncConfigControls()
+    this.setPanelTab(this.panelTab)
   }
 
   private applyControlValue(input: HTMLInputElement) {
@@ -800,6 +898,10 @@ export class DanmakuController {
     )
     buttons?.forEach((button) => {
       button.classList.toggle("is-active", button.dataset.value === value)
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.value === value),
+      )
     })
   }
 
@@ -809,6 +911,14 @@ export class DanmakuController {
       "aria-pressed",
       String(this.config.visible),
     )
+    const label = this.text(
+      this.config.visible ? "关闭弹幕" : "开启弹幕",
+      this.config.visible ? "Hide danmaku" : "Show danmaku",
+    )
+    this.toggleControl?.setAttribute("aria-label", label)
+    this.toggleControl
+      ?.querySelector(".openlist-player-icon")
+      ?.replaceWith(playerIcon(this.config.visible ? "danmaku" : "danmakuOff"))
   }
 
   private async restoreLocal() {
@@ -969,6 +1079,11 @@ export class DanmakuController {
           ? this.text("本地 XML", "Local XML")
           : this.text("在线聚合", "Online aggregate")
     }
+    for (const source of ["local", "online"]) {
+      this.panel
+        ?.querySelector(`[data-action="${source}"]`)
+        ?.setAttribute("aria-pressed", String(this.currentSource === source))
+    }
   }
 
   private setStatus(message: string) {
@@ -979,30 +1094,77 @@ export class DanmakuController {
     if (this.searchInput) this.searchInput.value = value
   }
 
-  private setPanelOpen(open: boolean) {
+  private setPanelOpen(open: boolean, focus = false) {
+    clearTimeout(this.hoverTimer)
     this.panelOpen = open
     this.panel?.classList.toggle("is-open", open)
+    if (this.panel) this.panel.hidden = !open
+    for (const [control, tab] of [
+      [this.sourceControl, "source"],
+      [this.settingsControl, "display"],
+    ] as const) {
+      control?.setAttribute(
+        "aria-expanded",
+        String(open && this.panelTab === tab),
+      )
+    }
+    this.player?.template.$player.classList.toggle("openlist-panel-open", open)
+    this.player?.emit("openlist:panel", open)
     if (open) {
+      if (this.player) {
+        this.player.setting.show = false
+        this.player.controls.show = true
+      }
       if (!this.searchInput?.value) {
         this.setInputValue(this.defaultQuery())
       }
-      if (this.panelTab === "source") {
-        window.setTimeout(() => this.searchInput?.focus(), 0)
+      if (focus) {
+        const touch =
+          this.player?.template.$player.dataset.openlistInput === "touch"
+        const target =
+          this.panelTab === "source" && !touch
+            ? this.searchInput
+            : this.panel?.querySelector<HTMLElement>("[data-action='close']")
+        target?.focus({ preventScroll: true })
       }
+    } else if (focus || this.panel?.contains(document.activeElement)) {
+      this.returnFocus?.focus({ preventScroll: true })
     }
   }
 
   private setPanelTab(tab: DanmakuPanelTab) {
     this.panelTab = tab
+    this.sourceControl?.setAttribute(
+      "aria-expanded",
+      String(this.panelOpen && tab === "source"),
+    )
+    this.settingsControl?.setAttribute(
+      "aria-expanded",
+      String(this.panelOpen && tab === "display"),
+    )
     this.panel
       ?.querySelectorAll<HTMLElement>("[data-tab]")
       .forEach((button) => {
         button.dataset.active = String(button.dataset.tab === tab)
+        button.setAttribute("aria-selected", String(button.dataset.tab === tab))
+        button.tabIndex = button.dataset.tab === tab ? 0 : -1
+        button.id = `${PANEL_ID}-tab-${button.dataset.tab}`
+        button.setAttribute(
+          "aria-controls",
+          `${PANEL_ID}-${button.dataset.tab}`,
+        )
       })
     this.panel
       ?.querySelectorAll<HTMLElement>("[data-tab-panel]")
       .forEach((panel) => {
         panel.dataset.active = String(panel.dataset.tabPanel === tab)
+        panel.id = `${PANEL_ID}-${panel.dataset.tabPanel}`
+        panel.setAttribute("role", "tabpanel")
+        panel.setAttribute(
+          "aria-labelledby",
+          `${PANEL_ID}-tab-${panel.dataset.tabPanel}`,
+        )
+        panel.hidden = panel.dataset.tabPanel !== tab
       })
   }
 
