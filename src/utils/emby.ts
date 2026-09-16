@@ -1,4 +1,4 @@
-const EMBY_DEVICE_ID_KEY = "openlist_emby_device_id"
+const EMBY_DEVICE_ID_KEY = "mahiro_emby_device_id"
 
 export const isEmbyProvider = (provider: string) =>
   provider.trim().toLowerCase() === "emby"
@@ -10,7 +10,7 @@ export const getEmbyDeviceID = () => {
   const random =
     globalThis.crypto?.randomUUID?.() ??
     Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
-  const deviceID = "openlist-web-" + random
+  const deviceID = "mahiro-web-" + random
   localStorage.setItem(EMBY_DEVICE_ID_KEY, deviceID)
   return deviceID
 }

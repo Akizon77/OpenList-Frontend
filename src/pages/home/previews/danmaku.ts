@@ -413,7 +413,7 @@ export class DanmakuController {
     const player = this.player
     if (!player || player.controls[TOGGLE_CONTROL]) return
 
-    this.toggleControl = player.controls.add({
+    player.controls.add({
       name: TOGGLE_CONTROL,
       index: 12,
       position: "right",
@@ -427,6 +427,7 @@ export class DanmakuController {
         })
       },
     })
+    this.toggleControl = player.controls[TOGGLE_CONTROL]
     this.syncToggleControl()
   }
 

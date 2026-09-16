@@ -427,7 +427,6 @@ describe("danmaku player settings", () => {
         control.addEventListener("click", option.click)
         toolbar.append(control)
         controls[option.name] = control
-        return control
       },
       remove: (name: string) => {
         controls[name]?.remove()
@@ -609,10 +608,25 @@ describe("danmaku ArtPlayer submenu navigation", () => {
       })
       const internal = controller as unknown as {
         player: Artplayer
+        addToggleControl: () => void
         installSettings: () => void
       }
       internal.player = player
+      internal.addToggleControl()
       internal.installSettings()
+      const toggle = player.controls["danmaku-toggle"]!
+      expect(toggle.querySelector(".bui-danmaku-switch-on")).not.toBeNull()
+      toggle.click()
+      expect(toggle.getAttribute("aria-pressed")).toBe("false")
+      expect(toggle.querySelector(".bui-danmaku-switch-on")).toBeNull()
+      expect(toggle.querySelector(".bui-danmaku-switch-off")).not.toBeNull()
+      expect(player.setting.find("openlist-danmaku-visible")?.switch).toBe(
+        false,
+      )
+      toggle.click()
+      expect(toggle.getAttribute("aria-pressed")).toBe("true")
+      expect(toggle.querySelector(".bui-danmaku-switch-on")).not.toBeNull()
+      expect(toggle.querySelector(".bui-danmaku-switch-off")).toBeNull()
       player.setting.show = true
       const more = player.setting.find("openlist-player-more")!
       ;(
